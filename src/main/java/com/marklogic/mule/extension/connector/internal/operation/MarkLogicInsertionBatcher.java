@@ -14,6 +14,7 @@
 package com.marklogic.mule.extension.connector.internal.operation;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.marklogic.client.DatabaseClient;
 import com.marklogic.client.datamovement.DataMovementManager;
@@ -28,10 +29,7 @@ import com.marklogic.mule.extension.connector.internal.connection.MarkLogicConne
 
 import java.io.InputStream;
 import java.text.SimpleDateFormat;
-import java.util.Calendar;
-import java.util.Date;
-import java.util.Timer;
-import java.util.TimerTask;
+import java.util.*;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,7 +39,7 @@ import org.slf4j.LoggerFactory;
  * Singleton class that manages inserting documents into MarkLogic
  */
 
-public class MarkLogicInsertionBatcher {
+public class MarkLogicInsertionBatcher implements MarkLogicConnectionInvalidationListener {
 
     private static final Logger logger = LoggerFactory.getLogger(MarkLogicInsertionBatcher.class);
     
@@ -52,11 +50,11 @@ public class MarkLogicInsertionBatcher {
     // private static Map<String,MarkLogicInsertionBatcher> instances = new HashMap<>();
 
     // Object that describes the metadata for documents being inserted
-    private final DocumentMetadataHandle metadataHandle;
+    private DocumentMetadataHandle metadataHandle;
 
     // How will we know when the resources are ready to be freed up and provide the results report?
-    private final JobTicket jobTicket;
-    private final String jobName;
+    private JobTicket jobTicket;
+    private String jobName;
     
     // The object that actually write record to ML
     private WriteBatcher batcher;
@@ -67,6 +65,10 @@ public class MarkLogicInsertionBatcher {
     // The timestamp of the last write to ML-- used to determine when the pipe to ML should be flushed
     private long lastWriteTime;
 
+    private boolean batcherRequiresReinit = false;
+    private MarkLogicConnection connection;
+    private Timer timer = null;
+
     /**
      * Private constructor-- enforces singleton pattern
      * @param configuration -- information describing how the insertion process should work
@@ -75,6 +77,13 @@ public class MarkLogicInsertionBatcher {
     private MarkLogicInsertionBatcher(MarkLogicConfiguration configuration, MarkLogicConnection connection, String outputCollections, String outputPermissions, int outputQuality, String jobName, String temporalCollection) {
 
         // get the object handles needed to talk to MarkLogic
+        initializeBatcher(connection, configuration, outputCollections, outputPermissions, outputQuality, temporalCollection);
+        this.jobName = jobName;
+    }
+
+    private void initializeBatcher(MarkLogicConnection connection, MarkLogicConfiguration configuration, String outputCollections, String outputPermissions, int outputQuality, String temporalCollection) {
+        this.connection = connection;
+        connection.addMarkLogicClientInvalidationListener(this);
         DatabaseClient myClient = connection.getClient();
         dmm = myClient.newDataMovementManager();
         batcher = dmm.newWriteBatcher();
@@ -114,7 +123,10 @@ public class MarkLogicInsertionBatcher {
         // Set up the timer to flush the pipe to MarkLogic if it's waiting to long
         int secondsBeforeFlush = Integer.parseInt(configuration.getSecondsBeforeFlush());
 
-        Timer timer = new Timer();
+        if (timer != null) {
+            timer.cancel();
+        }
+        timer = new Timer();
         timer.scheduleAtFixedRate(new TimerTask() {
             @Override
             public void run() {
@@ -170,7 +182,6 @@ public class MarkLogicInsertionBatcher {
 
         // start the batcher job
         this.jobTicket = dmm.startJob(batcher);
-        this.jobName = jobName;
     }
 
     /**
@@ -211,7 +222,9 @@ public class MarkLogicInsertionBatcher {
         obj.put("jobStartTime", calendarISO8601(jobStartTime));
         obj.put("jobEndTime", calendarISO8601(jobEndTime));
         obj.put("jobReportTime", calendarISO8601(jobReportTime));
+
         return obj;
+
     }
     
     /*Formats a <code>Calendar</code> value into a ISO8601-compliant date/time string.*/
@@ -239,6 +252,11 @@ public class MarkLogicInsertionBatcher {
             instance = new MarkLogicInsertionBatcher(config, connection, outputCollections, outputPermissions, outputQuality, jobName, temporalCollection);
             // instances.put(configId,instance);
             // Uncomment above to support multiple connection config scenario
+        } else if ((!(connection == null)) && (!connection.equals(instance.connection))) {
+            if (instance.batcherRequiresReinit) {
+                instance.initializeBatcher(connection, config, outputCollections, outputPermissions, outputQuality, temporalCollection);
+                instance.batcherRequiresReinit = false;
+            }
         }
         return instance;
     }
@@ -266,5 +284,11 @@ public class MarkLogicInsertionBatcher {
         batcher.awaitCompletion();
         // Return the job ticket ID so it can be used to retrieve the document in the future
         return jobTicket.getJobId();
+    }
+
+    @Override
+    public void markLogicConnectionInvalidated() {
+        logger.info("MarkLogic connection invalidated... reinitializing insertion batcher...");
+        batcherRequiresReinit = true;
     }
 }

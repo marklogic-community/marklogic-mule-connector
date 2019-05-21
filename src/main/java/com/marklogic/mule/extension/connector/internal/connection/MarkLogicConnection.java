@@ -14,13 +14,12 @@
 package com.marklogic.mule.extension.connector.internal.connection;
 
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.IOException;
 import java.io.InputStream;
 import java.security.*;
-import java.security.cert.CertificateException;
 import java.util.Arrays;
 import java.util.Enumeration;
+import java.util.HashSet;
+import java.util.Set;
 
 import com.marklogic.client.DatabaseClient;
 import com.marklogic.client.DatabaseClientFactory;
@@ -29,6 +28,7 @@ import com.marklogic.client.ext.DefaultConfiguredDatabaseClientFactory;
 import com.marklogic.client.ext.SecurityContextType;
 import com.marklogic.mule.extension.connector.internal.exception.MarkLogicConnectorException;
 
+import com.marklogic.mule.extension.connector.internal.operation.MarkLogicConnectionInvalidationListener;
 import org.mule.runtime.api.tls.TlsContextFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,8 +38,6 @@ import javax.net.ssl.*;
 public final class MarkLogicConnection {
 
   private static final Logger logger = LoggerFactory.getLogger(MarkLogicConnection.class);
-
-  private static final SecurityContextType DEFAULT_AUTHENTICATION_TYPE = SecurityContextType.BASIC;
   
   private DatabaseClient client;
     private final String hostname;
@@ -52,6 +50,7 @@ public final class MarkLogicConnection {
     private final TlsContextFactory sslContext;
     private final String kerberosExternalName;
     private final String connectionId;
+    private Set<MarkLogicConnectionInvalidationListener> markLogicClientInvalidationListeners = new HashSet<>();
 
   public MarkLogicConnection(String hostname, int port, String database, String username, String password, AuthenticationType authenticationType, TlsContextFactory sslContext, String kerberosExternalName, String connectionId) {
 
@@ -87,6 +86,10 @@ public final class MarkLogicConnection {
 
   public void invalidate() {
     client.release();
+    for (MarkLogicConnectionInvalidationListener listener : markLogicClientInvalidationListeners) {
+        listener.markLogicConnectionInvalidated();
+    }
+    logger.debug("MarkLogic connection invalidated.");
   }
   
   public boolean isConnected(int port) {
@@ -198,4 +201,10 @@ public final class MarkLogicConnection {
 
     }
 
+    public void addMarkLogicClientInvalidationListener(MarkLogicConnectionInvalidationListener listener) {
+        this.markLogicClientInvalidationListeners.add(listener);
+    }
+    public void removeMarkLogicClientInvalidationListener(MarkLogicConnectionInvalidationListener listener) {
+        markLogicClientInvalidationListeners.remove(listener);
+    }
 }
