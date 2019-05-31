@@ -22,6 +22,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+
 import com.marklogic.client.DatabaseClient;
 import com.marklogic.client.datamovement.DataMovementManager;
 import com.marklogic.client.datamovement.DeleteListener;
@@ -33,6 +34,8 @@ import com.marklogic.client.query.QueryManager;
 import com.marklogic.client.query.RawCtsQueryDefinition;
 import com.marklogic.client.query.RawStructuredQueryDefinition;
 import com.marklogic.client.query.StructuredQueryDefinition;
+import com.marklogic.client.semantics.GraphManager;
+import com.marklogic.client.semantics.RDFMimeTypes;
 
 import com.marklogic.mule.extension.connector.internal.config.MarkLogicConfiguration;
 import com.marklogic.mule.extension.connector.internal.connection.MarkLogicConnection;
@@ -256,6 +259,119 @@ public class MarkLogicOperations
             rootObj.put("deletionResult", String.format("%d document(s) deleted", resultsHandle.getTotalResults()));
             rootObj.put("deletionCount", resultsHandle.getTotalResults());
             return rootObj.toString();
+    }
+
+    @MediaType(value = APPLICATION_JSON, strict = true)
+    @Throws(MarkLogicExecuteErrorsProvider.class)
+    @DisplayName("importRDF")
+    public String importRDF(
+        @Config
+            MarkLogicConfiguration configuration,
+        @Connection
+            MarkLogicConnection connection,
+        @DisplayName("RDF Payload")
+        @Summary("The RDF data to be ingested")
+        @Content
+            InputStream rdfPayload,
+        @DisplayName("Serialized RDF Format")
+        @Summary("The MIME type format of the serialized RDF")
+            MarkLogicRDFMimeTypes serializationFormat,
+        @Optional(defaultValue="rest-reader,read,rest-writer,update")
+        @Summary("A comma-separated list of roles and capabilities to which persisted graph triples/quads will possess after successful ingestion.")
+        @Example("myRole,read,myRole,update")
+            String outputPermissions,
+        @Optional(defaultValue="#default")
+        @Summary("The default or named graph IRI used to persist the triples/quads")
+        @Example("#default")
+            String graphIRI
+        )  {
+            DatabaseClient client = connection.getClient();
+            GraphManager graphMgr = client.newGraphManager();
+            InputStreamHandle tripleHandle = new InputStreamHandle(rdfPayload);
+            switch (serializationFormat) {
+                case N3:
+                    tripleHandle.withMimetype(RDFMimeTypes.N3);
+                    break;
+                case NQUADS:
+                    tripleHandle.withMimetype(RDFMimeTypes.NQUADS);
+                    break;
+                case NTRIPLES:
+                    tripleHandle.withMimetype(RDFMimeTypes.NTRIPLES);
+                    break;
+                case RDFJSON:
+                    tripleHandle.withMimetype(RDFMimeTypes.RDFJSON);
+                    break;
+                case RDFXML:
+                    tripleHandle.withMimetype(RDFMimeTypes.RDFXML);
+                    break;
+                case TRIG:
+                    tripleHandle.withMimetype(RDFMimeTypes.TRIG);
+                    break;
+                case TRIPLEXML:
+                    tripleHandle.withMimetype(RDFMimeTypes.TRIPLEXML);
+                    break;
+                case TURTLE:
+                    tripleHandle.withMimetype(RDFMimeTypes.TURTLE);
+                    break;
+                default:
+                    logger.error(String.format("RDF serialization %s is not supported", serializationFormat));
+                    throw new RuntimeException("Invalid RDF serialization type. Unable to create RDF triples.");
+            }
+            if ((graphIRI == null) || (graphIRI.equals("null")) || (graphIRI.length() < 1) || (graphIRI.equals("#default")) || (graphIRI.equals("default"))) {
+                graphIRI = GraphManager.DEFAULT_GRAPH;
+            }
+            graphMgr.write(graphIRI, tripleHandle);
+            logger.info("Creating graph " + graphIRI);
+            ArrayNode rootObj = jsonFactory.createArrayNode();
+            rootObj.add(graphIRI);
+            String out = rootObj.toString();
+            logger.info(out);
+            return out;
+    }
+    
+    @MediaType(value = APPLICATION_JSON, strict = true)
+    @Throws(MarkLogicExecuteErrorsProvider.class)
+    @DisplayName("deleteRDFGraph")
+    public String deleteRDFGraph(
+        @Config
+            MarkLogicConfiguration configuration,
+        @Connection
+            MarkLogicConnection connection,
+        @Summary("The default or named graph IRI to be deleted. Deleting the #default graph is not allowed.")
+        @Example("/myGraph/")
+            String graphIRI
+        )  {
+            DatabaseClient client = connection.getClient();
+            GraphManager graphMgr = client.newGraphManager();
+            graphMgr.delete(graphIRI);
+            logger.info("Deleting graph " + graphIRI);
+            ArrayNode rootObj = jsonFactory.createArrayNode();
+            rootObj.add(graphIRI);
+            String out = rootObj.toString();
+            logger.info(out);
+            return out;
+    }
+    
+    @MediaType(value = APPLICATION_JSON, strict = true)
+    @Throws(MarkLogicExecuteErrorsProvider.class)
+    @DisplayName("listRDFGraphs")
+    public String listRDFGraphs(
+        @Config
+            MarkLogicConfiguration configuration,
+        @Connection
+            MarkLogicConnection connection
+        )  {
+            DatabaseClient client = connection.getClient();
+            GraphManager graphMgr = client.newGraphManager();
+            Iterator<String> iris = graphMgr.listGraphUris();
+            logger.info("Listing graph IRIs");
+            ArrayNode rootObj = jsonFactory.createArrayNode();
+            while (iris.hasNext()) {
+                rootObj.add(iris.next());
+            }
+            String out = rootObj.toString();
+            logger.info(out);
+            return out;
     }
 
     @MediaType(value = ANY, strict = false)
