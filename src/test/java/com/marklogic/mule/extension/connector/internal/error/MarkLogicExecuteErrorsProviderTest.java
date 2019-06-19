@@ -13,9 +13,29 @@
  */
 package com.marklogic.mule.extension.connector.internal.error;
 
+import java.util.Set;
+import org.junit.Test;
+import static org.junit.Assert.*;
 import org.mule.runtime.extension.api.error.ErrorTypeDefinition;
 
-public enum MarkLogicConnectorSimpleError implements ErrorTypeDefinition<MarkLogicConnectorSimpleError>
+/**
+ *
+ * @author jshingle
+ */
+public class MarkLogicExecuteErrorsProviderTest
 {
-    DATA_MOVEMENT_ERROR
+
+    /**
+     * Test of getErrorTypes method, of class MarkLogicExecuteErrorsProvider.
+     */
+    @Test
+    public void testGetErrorTypes()
+    {
+        MarkLogicExecuteErrorsProvider instance = new MarkLogicExecuteErrorsProvider();
+        Set<ErrorTypeDefinition> result = instance.getErrorTypes();
+
+        assertEquals(1, result.size());
+        assertTrue(result.contains(MarkLogicConnectorSimpleError.DATA_MOVEMENT_ERROR));
+    }
+
 }
