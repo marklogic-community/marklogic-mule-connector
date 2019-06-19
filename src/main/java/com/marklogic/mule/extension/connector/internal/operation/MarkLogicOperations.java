@@ -24,6 +24,7 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import com.marklogic.client.DatabaseClient;
+import com.marklogic.client.ResourceNotFoundException;
 import com.marklogic.client.datamovement.DataMovementManager;
 import com.marklogic.client.datamovement.DeleteListener;
 import com.marklogic.client.datamovement.QueryBatcher;
@@ -340,13 +341,17 @@ public class MarkLogicOperations
         @Summary("The default or named graph IRI to be deleted. Deleting the #default graph is not allowed.")
         @Example("/myGraph/")
             String graphIRI
-        )  {
+        ) {
             DatabaseClient client = connection.getClient();
             GraphManager graphMgr = client.newGraphManager();
-            graphMgr.delete(graphIRI);
             logger.info("Deleting graph " + graphIRI);
             ArrayNode rootObj = jsonFactory.createArrayNode();
-            rootObj.add(graphIRI);
+            try {
+                graphMgr.delete(graphIRI);
+                rootObj.add(graphIRI);
+            } catch (ResourceNotFoundException e) {
+                logger.error(String.format("Graph not found. Error was: %s", e.getMessage()), e);
+            }
             String out = rootObj.toString();
             logger.info(out);
             return out;
