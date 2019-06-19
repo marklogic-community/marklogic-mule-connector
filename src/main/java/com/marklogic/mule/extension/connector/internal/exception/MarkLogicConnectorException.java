@@ -13,7 +13,7 @@
  */
 package com.marklogic.mule.extension.connector.internal.exception;
 
-import com.marklogic.mule.extension.connector.internal.error.MarkLogicConnectorSimpleError;
+import com.marklogic.mule.extension.connector.internal.error.MarkLogicConnectorSimpleErrorType;
 import org.mule.runtime.extension.api.exception.ModuleException;
 
 public class MarkLogicConnectorException extends ModuleException
@@ -21,11 +21,11 @@ public class MarkLogicConnectorException extends ModuleException
 
     public MarkLogicConnectorException(String errorMessge)
     {
-        super(errorMessge, MarkLogicConnectorSimpleError.DATA_MOVEMENT_ERROR);
+        super(errorMessge, MarkLogicConnectorSimpleErrorType.DATA_MOVEMENT_ERROR);
     }
 
     public MarkLogicConnectorException(String errorMessage, Throwable error)
     {
-        super(errorMessage, MarkLogicConnectorSimpleError.DATA_MOVEMENT_ERROR, error);
+        super(errorMessage, MarkLogicConnectorSimpleErrorType.DATA_MOVEMENT_ERROR, error);
     }
 }

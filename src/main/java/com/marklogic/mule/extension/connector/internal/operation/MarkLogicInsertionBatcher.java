@@ -88,7 +88,8 @@ public class MarkLogicInsertionBatcher implements MarkLogicConnectionInvalidatio
         this.jobName = jobName;
     }
 
-    private void initializeBatcher(MarkLogicConnection connection, MarkLogicConfiguration configuration, String outputCollections, String outputPermissions, int outputQuality, String temporalCollection) {
+    private void initializeBatcher(MarkLogicConnection connection, MarkLogicConfiguration configuration, String outputCollections, String outputPermissions, int outputQuality, String temporalCollection)
+    {
         this.connection = connection;
         connection.addMarkLogicClientInvalidationListener(this);
         DatabaseClient myClient = connection.getClient();
@@ -133,9 +134,11 @@ public class MarkLogicInsertionBatcher implements MarkLogicConnectionInvalidatio
         timer = new Timer();
         timer.scheduleAtFixedRate(new TimerTask() {
             @Override
-            public void run() {
+            public void run()
+            {
                 // Check to see if the pipe has been inactive longer than the wait time
-                if ((System.currentTimeMillis() - lastWriteTime) >= secondsBeforeFlush * 1000) {
+                if ((System.currentTimeMillis() - lastWriteTime) >= secondsBeforeFlush * 1000)
+                {
                     // if it has, flush the pipe
                     batcher.flushAndWait();
                     // Set the last write time to be something well into the future, so that we don't needlessly,
@@ -152,7 +155,8 @@ public class MarkLogicInsertionBatcher implements MarkLogicConnectionInvalidatio
         String[] configCollections = outputCollections.split(",");
 
         // Set up list of collections that new docs should be put into
-        if (!configCollections[0].equals("null")) {
+        if (!configCollections[0].equals("null"))
+        {
             metadataHandle.withCollections(configCollections);
         }
         // Set up quality new docs should have
@@ -160,11 +164,13 @@ public class MarkLogicInsertionBatcher implements MarkLogicConnectionInvalidatio
 
         // Set up list of permissions that new docs should be granted
         String[] permissions = outputPermissions.split(",");
-        for (int i = 0; i < permissions.length - 1; i++) {
+        for (int i = 0; i < permissions.length - 1; i++)
+        {
             String role = permissions[i];
             String capability = permissions[i + 1];
-            switch(capability.toLowerCase()) {
-                case "read" :
+            switch (capability.toLowerCase())
+            {
+                case "read":
                     metadataHandle.getPermissions().add(role, DocumentMetadataHandle.Capability.READ);
                     break;
                 case "insert" :
@@ -190,6 +196,7 @@ public class MarkLogicInsertionBatcher implements MarkLogicConnectionInvalidatio
 
     /**
      * Creates a JSON object containing details about the batcher job
+     *
      * @return Job results report
      * @param jsonFactory
      */
@@ -255,6 +262,7 @@ public class MarkLogicInsertionBatcher implements MarkLogicConnectionInvalidatio
 
     /**
      * getInstance method to be used when configuration objects aren't available
+     *
      * @return instance of the batcher
      */
     static MarkLogicInsertionBatcher getInstance()
@@ -263,9 +271,12 @@ public class MarkLogicInsertionBatcher implements MarkLogicConnectionInvalidatio
     }
 
     /**
-     * Actually does the work of passing the document on to DMSDK to do its thing
+     * Actually does the work of passing the document on to DMSDK to do its
+     * thing
+     *
      * @param outURI -- the URI to be used for the document being inserted
-     * @param documentStream -- the InputStream containing the document to be inserted... comes from mule
+     * @param documentStream -- the InputStream containing the document to be
+     * inserted... comes from mule
      * @return jobTicketID
      */
     String doInsert(String outURI, InputStream documentStream)

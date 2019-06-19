@@ -14,7 +14,7 @@
 package com.marklogic.mule.extension.connector.internal.extension;
 
 import com.marklogic.mule.extension.connector.internal.config.MarkLogicConfiguration;
-import com.marklogic.mule.extension.connector.internal.error.MarkLogicConnectorSimpleError;
+import com.marklogic.mule.extension.connector.internal.error.MarkLogicConnectorSimpleErrorType;
 
 import static org.mule.runtime.api.meta.Category.CERTIFIED;
 import org.mule.runtime.extension.api.annotation.Extension;
@@ -30,7 +30,7 @@ import org.mule.runtime.extension.api.annotation.license.RequiresEnterpriseLicen
  */
 @Xml(prefix = "marklogic")
 @Extension(name = "MarkLogic", category = CERTIFIED, vendor = "MarkLogic")
-@ErrorTypes(MarkLogicConnectorSimpleError.class)
+@ErrorTypes(MarkLogicConnectorSimpleErrorType.class)
 @RequiresEnterpriseLicense(allowEvaluationLicense = true)
 @Configurations(MarkLogicConfiguration.class)
 public class MarkLogicExtension
