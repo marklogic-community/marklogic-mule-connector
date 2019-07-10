@@ -13,6 +13,7 @@
  */
 package com.marklogic.mule.extension.connector.internal.operation;
 
+import com.marklogic.mule.extension.connector.api.operation.MarkLogicExistingJobReportDocumentStrategy;
 import com.marklogic.mule.extension.connector.api.operation.MarkLogicQueryFormat;
 import com.marklogic.mule.extension.connector.api.operation.MarkLogicQueryStrategy;
 import java.io.InputStream;
@@ -112,11 +113,19 @@ public class MarkLogicOperations
             @DisplayName("Temporal collection")
             @Optional(defaultValue = "null")
             @Summary("The temporal collection imported documents will be loaded into.")
-            @Example("") String temporalCollection)
+            @Example("") String temporalCollection,
+            @DisplayName("Report Document URI")
+            @Optional(defaultValue = "null")
+            @Summary("The URI of the MarkLogic document that will contain the job results report, if any")
+            @Example("/jobReport.json") String jobReportUri,
+            @DisplayName("Job Report Document Write Mode")
+            @Optional(defaultValue = "OVERWRITE")
+            @Summary("If a document with the given Job Report URI already exists, determines whether it should be overwritten, or the results of the current operation be appended to those of the existing document")
+            @Example("OVERWRITE") MarkLogicExistingJobReportDocumentStrategy existingJobReportDocumentStrategy)
     {
 
         // Get a handle to the Insertion batch manager
-        MarkLogicInsertionBatcher batcher = MarkLogicInsertionBatcher.getInstance(configuration, connection, outputCollections, outputPermissions, outputQuality, configuration.getJobName(), temporalCollection);
+        MarkLogicInsertionBatcher batcher = MarkLogicInsertionBatcher.getInstance(configuration, connection, outputCollections, outputPermissions, outputQuality, configuration.getJobName(), temporalCollection, jobReportUri, existingJobReportDocumentStrategy);
 
         // Determine output URI
         // If the config tells us to generate a new UUID, do that
@@ -169,7 +178,7 @@ public class MarkLogicOperations
         if (insertionBatcher != null)
         {
             ArrayNode imports = jsonFactory.createArrayNode();
-            imports.add(insertionBatcher.createJsonJobReport(jsonFactory));
+            imports.add(insertionBatcher.createJsonJobReport());
             rootObj.set("importResults", imports);
         }
 

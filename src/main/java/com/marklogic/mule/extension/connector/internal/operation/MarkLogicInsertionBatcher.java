@@ -13,15 +13,17 @@
  */
 package com.marklogic.mule.extension.connector.internal.operation;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.marklogic.client.DatabaseClient;
-import com.marklogic.client.datamovement.DataMovementManager;
-import com.marklogic.client.datamovement.JobReport;
-import com.marklogic.client.datamovement.JobTicket;
-import com.marklogic.client.datamovement.WriteBatcher;
+import com.marklogic.client.datamovement.*;
+import com.marklogic.client.document.DocumentDescriptor;
+import com.marklogic.client.document.JSONDocumentManager;
 import com.marklogic.client.io.DocumentMetadataHandle;
 import com.marklogic.client.io.InputStreamHandle;
+import com.marklogic.client.io.JacksonHandle;
+import com.marklogic.mule.extension.connector.api.operation.MarkLogicExistingJobReportDocumentStrategy;
 import com.marklogic.mule.extension.connector.internal.config.MarkLogicConfiguration;
 import com.marklogic.mule.extension.connector.internal.connection.MarkLogicConnection;
 
@@ -51,6 +53,8 @@ public class MarkLogicInsertionBatcher implements MarkLogicConnectionInvalidatio
 
     // The single instance of this class
     private static MarkLogicInsertionBatcher instance;
+    private String jobReportUri;
+    private ObjectMapper jsonFactory = new ObjectMapper();
 
     // If support for multiple connection configs within a flow is required, remove the above and uncomment the below.
     // private static Map<String,MarkLogicInsertionBatcher> instances = new HashMap<>();
@@ -60,6 +64,13 @@ public class MarkLogicInsertionBatcher implements MarkLogicConnectionInvalidatio
     // How will we know when the resources are ready to be freed up and provide the results report?
     private JobTicket jobTicket;
     private final String jobName;
+    private JSONDocumentManager jobReportDocumentManager = null;
+    private DocumentDescriptor jobReportDocumentDescriptor;
+    private MarkLogicExistingJobReportDocumentStrategy existingJobReportDocumentStrategy;
+    private boolean jobReportBatcherInitialized = false;
+
+
+    private JacksonHandle jacksonHandle = new JacksonHandle();
 
     // The object that actually write record to ML
     private WriteBatcher batcher;
@@ -76,25 +87,29 @@ public class MarkLogicInsertionBatcher implements MarkLogicConnectionInvalidatio
 
     /**
      * Private constructor-- enforces singleton pattern
-     *
      * @param configuration -- information describing how the insertion process
      * should work
      * @param connection -- information describing how to connect to MarkLogic
+     * @param existingJobReportDocumentStrategy -- how to handle the case when the job report document is already present when the flow starts
      */
-    private MarkLogicInsertionBatcher(MarkLogicConfiguration configuration, MarkLogicConnection connection, String outputCollections, String outputPermissions, int outputQuality, String jobName, String temporalCollection)
+    private MarkLogicInsertionBatcher(MarkLogicConfiguration configuration, MarkLogicConnection connection, String outputCollections, String outputPermissions, int outputQuality, String jobName, String temporalCollection, String jobReportUri, MarkLogicExistingJobReportDocumentStrategy existingJobReportDocumentStrategy)
     {
         // get the object handles needed to talk to MarkLogic
-        initializeBatcher(connection, configuration, outputCollections, outputPermissions, outputQuality, temporalCollection);
+        initializeBatcher(connection, configuration, outputCollections, outputPermissions, outputQuality, temporalCollection,jobReportUri, existingJobReportDocumentStrategy);
         this.jobName = jobName;
+        this.jobReportUri = jobReportUri;
+        this.existingJobReportDocumentStrategy = existingJobReportDocumentStrategy;
     }
 
-    private void initializeBatcher(MarkLogicConnection connection, MarkLogicConfiguration configuration, String outputCollections, String outputPermissions, int outputQuality, String temporalCollection)
+    private void initializeBatcher(MarkLogicConnection connection, MarkLogicConfiguration configuration, String outputCollections, String outputPermissions, int outputQuality, String temporalCollection, String jobReportUri, MarkLogicExistingJobReportDocumentStrategy existingJobReportDocumentStrategy)
     {
         this.connection = connection;
+        this.jobReportUri = jobReportUri;
         connection.addMarkLogicClientInvalidationListener(this);
         DatabaseClient myClient = connection.getClient();
         dmm = myClient.newDataMovementManager();
         batcher = dmm.newWriteBatcher();
+        this.existingJobReportDocumentStrategy = existingJobReportDocumentStrategy;
         // Configure the batcher's behavior
         batcher.withBatchSize(configuration.getBatchSize())
                 .withThreadCount(configuration.getThreadCount())
@@ -109,9 +124,16 @@ public class MarkLogicInsertionBatcher implements MarkLogicConnectionInvalidatio
         // ASSUMPTION: The same transform (or lack thereof) will be used for every document to be inserted during the
         // lifetime of this object
 
+        if (jobReportUri != null && !("null".equals(jobReportUri)))
+        {
+            initializeJobReportBatcher();
+        }
         if ((temporalCollection != null) && !"null".equalsIgnoreCase(temporalCollection))
         {
-            System.out.println("TEMPORAL COLLECTION: " + temporalCollection);
+            if (logger.isDebugEnabled())
+            {
+                logger.debug("TEMPORAL COLLECTION: " + temporalCollection);
+            }
             batcher.withTemporalCollection(temporalCollection);
         }
 
@@ -200,20 +222,78 @@ public class MarkLogicInsertionBatcher implements MarkLogicConnectionInvalidatio
      * Creates a JSON object containing details about the batcher job
      *
      * @return Job results report
-     * @param jsonFactory
      */
-    ObjectNode createJsonJobReport(ObjectMapper jsonFactory)
+    ObjectNode createJsonJobReport()
     {
-        JobReport jr = dmm.getJobReport(jobTicket);
         ObjectNode obj = jsonFactory.createObjectNode();
-        obj.put("jobID", jobTicket.getJobId());
-        ZonedDateTime jobStartTime = toZonedDateTime(jr.getJobStartTime());
+        long successBatches = 0;
+        long successEvents = 0;
+        long failBatches = 0;
+        long failEvents = 0;
+        ZonedDateTime jobStartTime = null;
+        String jobID = null;
+
+        if (jobReportDocumentManager != null)
+        {
+            JacksonHandle jrh = null;
+            if (jobReportDocumentManager.exists(jobReportUri) != null)
+            {
+                try {
+                    jrh = jobReportDocumentManager.read(jobReportDocumentDescriptor, jacksonHandle);
+                } catch (IllegalStateException e)
+                {
+                    initializeJobReportBatcher();
+                    jrh = jobReportDocumentManager.read(jobReportDocumentDescriptor, jacksonHandle);
+                }
+            }
+            if (jrh != null)
+            {
+                JsonNode doc = jrh.get();
+                JsonNode instance = doc.get("envelope").get("instance");
+                if (instance != null)
+                {
+                    jobID = instance.get("jobID").asText();
+                    if (instance.get("jobStartTime") != null)
+                    {
+                        jobStartTime = ZonedDateTime.parse(instance.get("jobStartTime").asText());
+                    }
+                    if (instance.get("successfulBatches") != null)
+                    {
+                        successBatches = instance.get("successfulBatches").asLong();
+                    }
+                    if (instance.get("successfulEvents") != null)
+                    {
+                        successEvents = instance.get("successfulEvents").asLong();
+                    }
+                    if (instance.get("failedBatches") != null)
+                    {
+                        failBatches = instance.get("failedBatches").asLong();
+                    }
+                    if (instance.get("failedEvents") != null)
+                    {
+                        failEvents = instance.get("failedEvents").asLong();
+                    }
+                } else {
+                    logger.warn("Failed to parse Job Report document properly: " + jrh.toString());
+                }
+            }
+        }
+        JobReport jr = dmm.getJobReport(jobTicket);
+        if (jobID == null)
+        {
+            jobID = jobTicket.getJobId();
+        }
+        obj.put("jobID", jobID);
+        if (jobStartTime == null)
+        {
+            jobStartTime = toZonedDateTime(jr.getJobStartTime());
+        }
         ZonedDateTime jobEndTime = toZonedDateTime(jr.getJobEndTime());
         ZonedDateTime jobReportTime = toZonedDateTime(jr.getReportTimestamp());
-        long successBatches = jr.getSuccessBatchesCount();
-        long successEvents = jr.getSuccessEventsCount();
-        long failBatches = jr.getFailureBatchesCount();
-        long failEvents = jr.getFailureEventsCount();
+        successBatches += jr.getSuccessBatchesCount();
+        successEvents += jr.getSuccessEventsCount();
+        failBatches += jr.getFailureBatchesCount();
+        failEvents += jr.getFailureEventsCount();
         if (failEvents > 0)
         {
             obj.put("jobOutcome", "failed");
@@ -240,17 +320,16 @@ public class MarkLogicInsertionBatcher implements MarkLogicConnectionInvalidatio
      * @param config -- information describing how the insertion process should
      * work
      * @param connection -- information describing how to connect to MarkLogic
-     * @param temporalCollection
+     * @param temporalCollection -- name of temporal collection to be used, if there is one
      * @return instance of the batcher
      */
-    static MarkLogicInsertionBatcher getInstance(MarkLogicConfiguration config, MarkLogicConnection connection, String outputCollections, String outputPermissions, int outputQuality, String jobName, String temporalCollection)
-    {
+    static MarkLogicInsertionBatcher getInstance(MarkLogicConfiguration config, MarkLogicConnection connection, String outputCollections, String outputPermissions, int outputQuality, String jobName, String temporalCollection, String jobReportUri, MarkLogicExistingJobReportDocumentStrategy existingJobReportDocumentStrategy)    {
         // String configId = config.getConfigId();
         // MarkLogicInsertionBatcher instance = instances.get(configId);
         // Uncomment above to support multiple connection config scenario
         if (instance == null)
         {
-            instance = new MarkLogicInsertionBatcher(config, connection, outputCollections, outputPermissions, outputQuality, jobName, temporalCollection);
+            instance = new MarkLogicInsertionBatcher(config, connection, outputCollections, outputPermissions, outputQuality, jobName, temporalCollection, jobReportUri, existingJobReportDocumentStrategy);
             // instances.put(configId,instance);
             // Uncomment above to support multiple connection config scenario
         }
@@ -258,7 +337,7 @@ public class MarkLogicInsertionBatcher implements MarkLogicConnectionInvalidatio
         {
             if (instance.batcherRequiresReinit)
             {
-                instance.initializeBatcher(connection, config, outputCollections, outputPermissions, outputQuality, temporalCollection);
+                instance.initializeBatcher(connection, config, outputCollections, outputPermissions, outputQuality, temporalCollection, jobReportUri, existingJobReportDocumentStrategy);
                 instance.batcherRequiresReinit = false;
             }
         }
@@ -310,7 +389,31 @@ public class MarkLogicInsertionBatcher implements MarkLogicConnectionInvalidatio
     @Override
     public void markLogicConnectionInvalidated()
     {
+        // Save the job results to MarkLogic if a URI is specified for that purpose
+        if (jobReportDocumentManager != null)
+        {
+            ObjectNode jobReport = createJsonJobReport();
+            batcher.addAs(jobReportUri,metadataHandle,new JacksonHandle(jobReport));
+            batcher.flushAndWait();
+        }
         logger.info("MarkLogic connection invalidated... reinitializing insertion batcher...");
         batcherRequiresReinit = true;
+    }
+
+    /**
+     * This function gets called under 2 conditions:
+     *   -When the flow first starts
+     *   -If the connection has been invalidated and then re-opened
+     */
+    private void initializeJobReportBatcher ()
+    {
+        jobReportDocumentManager = connection.getClient(!(jobReportDocumentManager == null)).newJSONDocumentManager();
+        jobReportDocumentManager.setPageLength(1);
+        jobReportDocumentDescriptor = jobReportDocumentManager.newDescriptor(jobReportUri);
+        // If this is the start of the flow, and we're using an overwrite strategy, delete the job report document, if it exists
+        if ((existingJobReportDocumentStrategy == MarkLogicExistingJobReportDocumentStrategy.OVERWRITE) && (!jobReportBatcherInitialized) && (jobReportDocumentManager.exists(jobReportUri) != null))  {
+            jobReportDocumentManager.delete(jobReportDocumentDescriptor);
+        }
+        jobReportBatcherInitialized = true;
     }
 }

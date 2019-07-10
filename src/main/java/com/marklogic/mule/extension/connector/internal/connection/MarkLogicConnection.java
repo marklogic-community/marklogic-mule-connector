@@ -93,11 +93,11 @@ public final class MarkLogicConnection
 
     public void invalidate()
     {
-        client.release();
         markLogicClientInvalidationListeners.forEach((listener) ->
         {
             listener.markLogicConnectionInvalidated();
         });
+        client.release();
         logger.debug("MarkLogic connection invalidated.");
   }
     public boolean isConnected(int port)
@@ -116,6 +116,20 @@ public final class MarkLogicConnection
 
     public DatabaseClient getClient()
     {
+        return getClient(false);
+    }
+
+    public DatabaseClient getClient(boolean reinit)
+    {
+        if (reinit)
+        {
+            try {
+                createClient();
+            } catch (Exception e)
+            {
+                logger.error("Could not re-initialize database client", e);
+            }
+        }
         return this.client;
     }
 
