@@ -118,7 +118,7 @@ public class MarkLogicInsertionBatcher implements MarkLogicConnectionInvalidatio
                 })
                 .onBatchFailure((batch, throwable) ->
                 {
-                    logger.error("Exception thrown by an onBatchSuccess listener", throwable);  // For Sonar...
+                    logger.error("Exception thrown by an onBatchFailure listener", throwable);  // For Sonar...
                 });
         // Configure the transform to be used, if any
         // ASSUMPTION: The same transform (or lack thereof) will be used for every document to be inserted during the
@@ -323,7 +323,7 @@ public class MarkLogicInsertionBatcher implements MarkLogicConnectionInvalidatio
      * @param temporalCollection -- name of temporal collection to be used, if there is one
      * @return instance of the batcher
      */
-    static MarkLogicInsertionBatcher getInstance(MarkLogicConfiguration config, MarkLogicConnection connection, String outputCollections, String outputPermissions, int outputQuality, String jobName, String temporalCollection, String jobReportUri, MarkLogicExistingJobReportDocumentStrategy existingJobReportDocumentStrategy)    {
+    synchronized static MarkLogicInsertionBatcher getInstance(MarkLogicConfiguration config, MarkLogicConnection connection, String outputCollections, String outputPermissions, int outputQuality, String jobName, String temporalCollection, String jobReportUri, MarkLogicExistingJobReportDocumentStrategy existingJobReportDocumentStrategy)    {
         // String configId = config.getConfigId();
         // MarkLogicInsertionBatcher instance = instances.get(configId);
         // Uncomment above to support multiple connection config scenario
