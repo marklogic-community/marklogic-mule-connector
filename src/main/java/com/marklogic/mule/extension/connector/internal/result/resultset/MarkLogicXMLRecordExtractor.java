@@ -14,18 +14,20 @@
 package com.marklogic.mule.extension.connector.internal.result.resultset;
 
 import com.marklogic.client.io.Format;
+import com.marklogic.client.io.InputStreamHandle;
 import com.marklogic.client.io.StringHandle;
-import com.marklogic.client.io.XMLStreamReaderHandle;
+import com.marklogic.mule.extension.connector.api.MarkLogicAttributes;
+import org.mule.runtime.api.metadata.MediaType;
+import org.mule.runtime.extension.api.runtime.operation.Result;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.marklogic.client.document.DocumentRecord;
-import com.marklogic.client.io.DOMHandle;
-import org.w3c.dom.Document;
 import org.w3c.dom.NamedNodeMap;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
+import java.io.InputStream;
 import java.util.*;
 
 /**
@@ -39,10 +41,19 @@ public class MarkLogicXMLRecordExtractor extends MarkLogicRecordExtractor {
     private StringHandle handle = new StringHandle();
 
     @Override
-    protected Object extractRecord(DocumentRecord record) {
-        StringHandle retVal = record.getContent(handle).withMimetype("application/xml").withFormat(Format.XML);
-        return retVal.get();
-
+    protected Result<Object,MarkLogicAttributes> extractRecord(DocumentRecord record) {
+        StringHandle retVal = record.getContent(handle);
+        MarkLogicAttributes attributes = new MarkLogicAttributes(retVal.getMimetype());
+        Result result = Result.<Object,MarkLogicAttributes>builder()
+                .mediaType(MediaType.parse(retVal.getMimetype()))
+                .attributesMediaType(MediaType.APPLICATION_JAVA)
+                .output(retVal.get())
+                .attributes(attributes)
+                .build();
+        if (logger.isDebugEnabled()) {
+            logger.debug("extracted record attributes: " + attributes);
+        }
+        return result;
     }
 
     /**

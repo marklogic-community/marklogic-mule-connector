@@ -21,6 +21,8 @@ import com.marklogic.client.io.BytesHandle;
 import com.marklogic.client.io.DOMHandle;
 import com.marklogic.client.io.JacksonHandle;
 import com.marklogic.client.io.StringHandle;
+import com.marklogic.mule.extension.connector.api.MarkLogicAttributes;
+import org.mule.runtime.extension.api.runtime.operation.Result;
 import org.w3c.dom.Document;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
@@ -38,28 +40,12 @@ public class MarkLogicJSONRecordExtractor extends MarkLogicRecordExtractor {
     // Objects used for handling JSON documents
     private JacksonHandle jacksonHandle = new JacksonHandle();
     private ObjectMapper jsonMapper = new ObjectMapper();
+    private StringHandle handle = new StringHandle();
 
     @Override
-    protected Object extractRecord(DocumentRecord record) {
-        Object content;
-        JsonNode jsonNode = record.getContent(jacksonHandle).get();
-        JsonNodeType nodeType = jsonNode.getNodeType();
-        if (null == nodeType) {
-            content = jsonMapper.convertValue(jsonNode, Map.class);
-        } else switch (nodeType) {
-            case ARRAY:
-                content = jsonMapper.convertValue(jsonNode, List.class);
-                break;
-            case STRING:
-                content = jsonMapper.convertValue(jsonNode, String.class);
-                break;
-            case NUMBER:
-                content = jsonMapper.convertValue(jsonNode, Number.class);
-                break;
-            default:
-                content = jsonMapper.convertValue(jsonNode, Map.class);
-                break;
-        }
-        return content;
+    protected Result<Object,MarkLogicAttributes> extractRecord(DocumentRecord record) {
+        StringHandle retVal = record.getContent(handle);
+        MarkLogicAttributes attributes = new MarkLogicAttributes(retVal.getMimetype());
+        return Result.<Object,MarkLogicAttributes>builder().output(retVal.get()).attributes(attributes).build();
     }
 }

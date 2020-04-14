@@ -21,6 +21,8 @@ import com.marklogic.client.io.BytesHandle;
 import com.marklogic.client.io.DOMHandle;
 import com.marklogic.client.io.JacksonHandle;
 import com.marklogic.client.io.StringHandle;
+import com.marklogic.mule.extension.connector.api.MarkLogicAttributes;
+import org.mule.runtime.extension.api.runtime.operation.Result;
 import org.w3c.dom.Document;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
@@ -39,9 +41,9 @@ public class MarkLogicTextRecordExtractor extends MarkLogicRecordExtractor {
     private StringHandle stringHandle = new StringHandle();
 
     @Override
-    protected Object extractRecord(DocumentRecord record) {
-        Object content;
-        content = record.getContent(stringHandle).get();
-        return content;
+    protected Result<Object, MarkLogicAttributes> extractRecord(DocumentRecord record) {
+        StringHandle retVal = record.getContent(stringHandle);
+        MarkLogicAttributes attributes = new MarkLogicAttributes(retVal.getMimetype());
+        return Result.<Object,MarkLogicAttributes>builder().output(retVal.get()).attributes(attributes).build();
     }
 }

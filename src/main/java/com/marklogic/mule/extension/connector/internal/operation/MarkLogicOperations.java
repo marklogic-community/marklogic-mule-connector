@@ -13,6 +13,7 @@
  */
 package com.marklogic.mule.extension.connector.internal.operation;
 
+import com.marklogic.mule.extension.connector.api.MarkLogicAttributes;
 import com.marklogic.mule.extension.connector.api.operation.MarkLogicQueryFormat;
 import com.marklogic.mule.extension.connector.api.operation.MarkLogicQueryStrategy;
 import java.io.InputStream;
@@ -58,6 +59,7 @@ import org.mule.runtime.extension.api.annotation.param.display.Summary;
 
 import org.mule.runtime.extension.api.annotation.param.display.Text;
 import org.mule.runtime.extension.api.runtime.operation.FlowListener;
+import org.mule.runtime.extension.api.runtime.operation.Result;
 import org.mule.runtime.extension.api.runtime.streaming.PagingProvider;
 import org.mule.runtime.extension.api.runtime.streaming.StreamingHelper;
 import org.slf4j.Logger;
@@ -476,11 +478,11 @@ public class MarkLogicOperations
 
  /**
  * <p>Retrieve query-selected document content asynchronously from MarkLogic, via the <a target="_blank" href="https://docs.marklogic.com/guide/java/intro">MarkLogic Java API</a> <a target="_blank" href="https://docs.marklogic.com/guide/java/data-movement">Data Movement SDK (DMSDK)</a>.</p>
+ * @param pageLength Number of documents fetched at a time, defaults to the connection batch size.
  * @param configuration The MarkLogic configuration details
  * @param queryString The serialized query XML or JSON.
  * @param optionsName The server-side Search API options file used to configure the search.
  * @param queryStrategy The Java class used to execute the serialized query.
- * @param pageLength Number of documents fetched at a time, defaults to the connection batch size.
  * @param maxResults Maximum total number of documents to be fetched, defaults to unlimited.
  * @param useConsistentSnapshot Whether to use a consistent point-in-time snapshot for operations.
  * @param fmt The format of the serialized query.
@@ -492,7 +494,7 @@ public class MarkLogicOperations
     @MediaType(value = ANY, strict = false)
     @OutputResolver(output = MarkLogicSelectMetadataResolver.class)
     @Throws(MarkLogicExecuteErrorsProvider.class)
-    public PagingProvider<MarkLogicConnector, Object> exportDocs(
+    public PagingProvider<MarkLogicConnector, Result<Object, MarkLogicAttributes>> exportDocs(
             @Config MarkLogicConfiguration configuration,
             @DisplayName("Serialized Query String")
             @Summary("The serialized query XML or JSON.")
@@ -508,13 +510,14 @@ public class MarkLogicOperations
             @DisplayName("Use Consistent Snapshot")
             @Summary("Whether to use a consistent point-in-time snapshot for operations.") boolean useConsistentSnapshot,
             @DisplayName("Serialized Query Format")
-            @Summary("The format of the serialized query.") MarkLogicQueryFormat fmt
+            @Summary("The format of the serialized query.") MarkLogicQueryFormat fmt,
+            StreamingHelper streamingHelper
     )
     {
         maxResults = maxResults != null ? maxResults : 0;
         MarkLogicExportListener exportListener = new MarkLogicExportListener(maxResults);
 
-        return new PagingProvider<MarkLogicConnector, Object>()
+        return new PagingProvider<MarkLogicConnector, Result<Object, MarkLogicAttributes>>()
         {
 
             private final AtomicBoolean initialised = new AtomicBoolean(false);
@@ -523,7 +526,7 @@ public class MarkLogicOperations
             private DataMovementManager dmm = null;
 
             @Override
-            public List<Object> getPage(MarkLogicConnector markLogicConnector)
+            public List<Result<Object, MarkLogicAttributes>> getPage(MarkLogicConnector markLogicConnector)
             {
                 if (initialised.compareAndSet(false, true))
                 {
@@ -559,10 +562,18 @@ public class MarkLogicOperations
                 {
                     logger.warn("Data Movement Manager is null after initialization.");
                 }
-                List<Object> results = new ArrayList<>(exportListener.getDocs());
+                List<Result<Object, MarkLogicAttributes>> documents = new ArrayList<>();
+                for (Result document : exportListener.getDocs()) {
+                    if (logger.isDebugEnabled()) {
+                        logger.debug("exported doc getOutput(): " + document.getOutput());
+                        logger.debug("exported doc getMediaType(): " + document.getMediaType());
+                    }
+                    documents.add(document);
+                }
+
                 exportListener.clearDocs();
 
-                return results;
+                return documents;
             }
 
             @Override
