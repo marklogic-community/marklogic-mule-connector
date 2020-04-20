@@ -33,6 +33,7 @@ import com.marklogic.client.io.*;
 import com.marklogic.client.query.QueryDefinition;
 import com.marklogic.client.query.QueryManager;
 
+import com.marklogic.mule.extension.connector.api.MarkLogicAttributes;
 import com.marklogic.mule.extension.connector.internal.config.MarkLogicConfiguration;
 import com.marklogic.mule.extension.connector.internal.connection.MarkLogicConnector;
 import com.marklogic.mule.extension.connector.internal.error.provider.MarkLogicExecuteErrorsProvider;
@@ -60,6 +61,7 @@ import org.mule.runtime.extension.api.annotation.param.display.Summary;
 
 import org.mule.runtime.extension.api.annotation.param.display.Text;
 import org.mule.runtime.extension.api.runtime.operation.FlowListener;
+import org.mule.runtime.extension.api.runtime.operation.Result;
 import org.mule.runtime.extension.api.runtime.streaming.PagingProvider;
 import org.mule.runtime.extension.api.runtime.streaming.StreamingHelper;
 import org.slf4j.Logger;
@@ -455,7 +457,6 @@ public class MarkLogicOperations
  * @param optionsName The server-side Search API options file used to configure the search.
  * @param queryStrategy The Java class used to execute the serialized query.
  * @param fmt The format of the serialized query.
- * @param pageLength Number of documents fetched at a time, defaults to the connection batch size.
  * @param maxResults Maximum total number of documents to be fetched, defaults to unlimited.
  * @param useConsistentSnapshot Whether to use a consistent point-in-time snapshot for operations.
  * @param serverTransform The name of a deployed MarkLogic server-side Javascript, XQuery, or XSLT.
@@ -468,7 +469,7 @@ public class MarkLogicOperations
     @MediaType(value = ANY, strict = false)
     @OutputResolver(output = MarkLogicAnyMetadataResolver.class)
     @Throws(MarkLogicExecuteErrorsProvider.class)
-    public PagingProvider<MarkLogicConnector, Object> exportDocs(
+    public PagingProvider<MarkLogicConnector, Result<Object, MarkLogicAttributes>> exportDocs(
             @Config MarkLogicConfiguration configuration,
             @DisplayName("Serialized Query String")
             @Summary("The serialized query XML or JSON.")
@@ -496,14 +497,14 @@ public class MarkLogicOperations
         maxResults = maxResults != null ? maxResults : 0;
         MarkLogicExportListener exportListener = new MarkLogicExportListener(maxResults);
 
-        return new PagingProvider<MarkLogicConnector, Object>()
+        return new PagingProvider<MarkLogicConnector, Result<Object, MarkLogicAttributes>>()
         {
             private final AtomicBoolean initialised = new AtomicBoolean(false);
             private QueryBatcher batcher;
             private DataMovementManager dmm = null;
 
             @Override
-            public List<Object> getPage(MarkLogicConnector markLogicConnector)
+            public List<Result<Object, MarkLogicAttributes>> getPage(MarkLogicConnector markLogicConnector)
             {
                 if (initialised.compareAndSet(false, true))
                 {
@@ -542,10 +543,18 @@ public class MarkLogicOperations
                 {
                     logger.warn("Data Movement Manager is null after initialization.");
                 }
-                List<Object> results = new ArrayList<>(exportListener.getDocs());
+                List<Result<Object, MarkLogicAttributes>> documents = new ArrayList<>();
+                for (Result document : exportListener.getDocs()) {
+                    if (logger.isDebugEnabled()) {
+                        logger.debug("exported doc getOutput(): " + document.getOutput());
+                        logger.debug("exported doc getMediaType(): " + document.getMediaType());
+                        logger.debug("exported doc getByteLength(): " + document.getByteLength());
+                    }
+                    documents.add(document);
+                }
                 exportListener.clearDocs();
 
-                return results;
+                return documents;
             }
 
             @Override

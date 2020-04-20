@@ -17,6 +17,8 @@ import com.marklogic.mule.extension.connector.internal.result.resultset.*;
 
 import java.util.Arrays;
 import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public enum MarkLogicMimeType {
 
@@ -32,6 +34,7 @@ public enum MarkLogicMimeType {
     json{
         @Override
         public MarkLogicRecordExtractor getRecordExtractor() {
+            logger.info("JSON Extractor called");
             if (jsonRecordExtractor == null) {
                 jsonRecordExtractor = new MarkLogicJSONRecordExtractor();
             }
@@ -58,6 +61,8 @@ public enum MarkLogicMimeType {
 
 
     };
+    
+    private static final Logger logger = LoggerFactory.getLogger(MarkLogicMimeType.class);
 
     private static MarkLogicBinaryRecordExtractor binaryRecordExtractor;
     private static MarkLogicXMLRecordExtractor xmlRecordExtractor;

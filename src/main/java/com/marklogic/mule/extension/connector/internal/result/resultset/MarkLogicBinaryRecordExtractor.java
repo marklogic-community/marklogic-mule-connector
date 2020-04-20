@@ -18,6 +18,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.JsonNodeType;
 import com.marklogic.client.document.DocumentRecord;
 import com.marklogic.client.io.BytesHandle;
+import com.marklogic.mule.extension.connector.api.MarkLogicAttributes;
+import org.mule.runtime.extension.api.runtime.operation.Result;
 import com.marklogic.client.io.DOMHandle;
 import com.marklogic.client.io.JacksonHandle;
 import com.marklogic.client.io.StringHandle;
@@ -39,7 +41,9 @@ public class MarkLogicBinaryRecordExtractor extends MarkLogicRecordExtractor {
     private BytesHandle binaryHandle = new BytesHandle();
 
     @Override
-    protected Object extractRecord(DocumentRecord record) {
-        return record.getContent(binaryHandle).get();
+    protected Result<Object,MarkLogicAttributes> extractRecord(DocumentRecord record) {
+        BytesHandle handle = record.getContent(binaryHandle);
+        MarkLogicAttributes attributes = new MarkLogicAttributes(handle.getMimetype());
+        return Result.<Object, MarkLogicAttributes>builder().output(handle.get()).attributes(attributes).build();
     }
 }

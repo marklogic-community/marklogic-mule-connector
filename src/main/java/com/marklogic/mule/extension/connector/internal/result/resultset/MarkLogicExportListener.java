@@ -16,6 +16,8 @@ package com.marklogic.mule.extension.connector.internal.result.resultset;
 import com.marklogic.client.datamovement.DataMovementManager;
 import com.marklogic.client.datamovement.ExportListener;
 import com.marklogic.client.datamovement.QueryBatcher;
+import com.marklogic.mule.extension.connector.api.MarkLogicAttributes;
+import org.mule.runtime.extension.api.runtime.operation.Result;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -32,7 +34,7 @@ public class MarkLogicExportListener extends ExportListener {
 
     private static final Logger logger = LoggerFactory.getLogger(MarkLogicExportListener.class);
 
-    private List<Object> docs = new ArrayList<>();
+    private List<Result<Object, MarkLogicAttributes>> docs = new ArrayList<>();
 
     private long maxDocs = 0;
     private AtomicLong resultCount = new AtomicLong(0);
@@ -59,7 +61,7 @@ public class MarkLogicExportListener extends ExportListener {
         });
     }
 
-    public List<Object> getDocs()
+    public List<Result<Object, MarkLogicAttributes>> getDocs()
     {
         return docs;
     }
