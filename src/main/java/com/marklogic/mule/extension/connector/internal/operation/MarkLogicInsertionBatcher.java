@@ -1,7 +1,7 @@
 /**
  * MarkLogic Mule Connector
  *
- * Copyright © 2019 MarkLogic Corporation.
+ * Copyright © 2020 MarkLogic Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License. You may obtain a copy of the License at
  *
@@ -20,21 +20,28 @@ import com.marklogic.client.datamovement.DataMovementManager;
 import com.marklogic.client.datamovement.JobReport;
 import com.marklogic.client.datamovement.JobTicket;
 import com.marklogic.client.datamovement.WriteBatcher;
+import com.marklogic.client.document.ServerTransform;
 import com.marklogic.client.io.DocumentMetadataHandle;
 import com.marklogic.client.io.InputStreamHandle;
+import com.marklogic.mule.extension.connector.internal.config.DataHubConfiguration;
+import com.marklogic.mule.extension.connector.internal.config.DataHubRunFlowOptions;
 import com.marklogic.mule.extension.connector.internal.config.MarkLogicConfiguration;
 import com.marklogic.mule.extension.connector.internal.connection.MarkLogicConnection;
 
+import java.io.ByteArrayInputStream;
 import java.io.InputStream;
+import java.io.IOException;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Calendar;
-
 import java.util.TimeZone;
 import java.util.Timer;
 import java.util.TimerTask;
 
+import com.marklogic.mule.extension.connector.internal.error.exception.MarkLogicConnectorException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -53,7 +60,8 @@ public class MarkLogicInsertionBatcher implements MarkLogicConnectionInvalidatio
     private static MarkLogicInsertionBatcher instance;
 
     // If support for multiple connection configs within a flow is required, remove the above and uncomment the below.
-    // private static Map<String,MarkLogicInsertionBatcher> instances = new HashMap<>();
+    // private static Map<String,MarkLogicInsertionBatcher> instances = new HashMap<>()_
+    
     // Object that describes the metadata for documents being inserted
     private DocumentMetadataHandle metadataHandle;
 
@@ -77,19 +85,25 @@ public class MarkLogicInsertionBatcher implements MarkLogicConnectionInvalidatio
     /**
      * Private constructor-- enforces singleton pattern
      *
-     * @param configuration -- information describing how the insertion process
+     * @param marklogicConfiguration -- information describing how the insertion process
      * should work
      * @param connection -- information describing how to connect to MarkLogic
+     * @param serverTransform
+     * @param serverTransformParams
      */
-    private MarkLogicInsertionBatcher(MarkLogicConfiguration configuration, MarkLogicConnection connection, String outputCollections, String outputPermissions, int outputQuality, String jobName, String temporalCollection)
+    private MarkLogicInsertionBatcher(MarkLogicConfiguration marklogicConfiguration, MarkLogicConnection connection, DataHubConfiguration dataHubConfiguration, DataHubRunFlowOptions dataHubRunFlowOptions, String outputCollections, String outputPermissions, int outputQuality, String jobName, String temporalCollection, String serverTransform, String serverTransformParams)
     {
         // get the object handles needed to talk to MarkLogic
-        initializeBatcher(connection, configuration, outputCollections, outputPermissions, outputQuality, temporalCollection);
+        initializeBatcher(connection, marklogicConfiguration, dataHubConfiguration, dataHubRunFlowOptions, outputCollections, outputPermissions, outputQuality, temporalCollection, serverTransform, serverTransformParams);
         this.jobName = jobName;
     }
 
-    private void initializeBatcher(MarkLogicConnection connection, MarkLogicConfiguration configuration, String outputCollections, String outputPermissions, int outputQuality, String temporalCollection)
+    private void initializeBatcher(MarkLogicConnection connection, MarkLogicConfiguration configuration, DataHubConfiguration dataHubConfiguration, DataHubRunFlowOptions dataHubRunFlowOptions, String outputCollections, String outputPermissions, int outputQuality, String temporalCollection, String serverTransform, String serverTransformParams)
     {
+        boolean usingDataHub = dataHubConfiguration != null && dataHubRunFlowOptions != null;
+        if (usingDataHub && !dataHubRunFlowOptions.getIsFirstStepIngestion())
+            throw new MarkLogicConnectorException("No data hub ingestion step indicated in run flow options.");
+
         this.connection = connection;
         connection.addMarkLogicClientInvalidationListener(this);
         DatabaseClient myClient = connection.getClient();
@@ -98,13 +112,15 @@ public class MarkLogicInsertionBatcher implements MarkLogicConnectionInvalidatio
         // Configure the batcher's behavior
         batcher.withBatchSize(configuration.getBatchSize())
                 .withThreadCount(configuration.getThreadCount())
-                .onBatchSuccess((batch) ->
-                {
-                })
-                .onBatchFailure((batch, throwable) ->
-                {
-                    logger.error("Exception thrown by an onBatchSuccess listener", throwable);  // For Sonar...
-                });
+                .onBatchSuccess((batch) -> logger.debug("Writes so far: " + batch.getJobWritesSoFar()))
+                .onBatchFailure((batch, throwable) -> logger.error("Exception thrown by an onBatchSuccess listener", throwable));
+
+        if (usingDataHub) {
+            // run the specified data hub flow step(s) against the documents inserted for each batch
+            DataHubRunFlowBatchListener runFlowBatchListener = new DataHubRunFlowBatchListener(connection, dataHubConfiguration, dataHubRunFlowOptions);
+            batcher.onBatchSuccess(runFlowBatchListener);
+        }
+        
         // Configure the transform to be used, if any
         // ASSUMPTION: The same transform (or lack thereof) will be used for every document to be inserted during the
         // lifetime of this object
@@ -115,14 +131,12 @@ public class MarkLogicInsertionBatcher implements MarkLogicConnectionInvalidatio
             batcher.withTemporalCollection(temporalCollection);
         }
 
-        if (configuration.hasServerTransform())
+        // Have to do this if we want to duplicate "standard" DHF ingestion (e.g. wrap data in an envelope)
+        // Will still work w/o a transform, but we won't get header metadata or trigger custom hook(s)
+        ServerTransform transform = usingDataHub ? dataHubRunFlowOptions.getIngestionStepTransform() : configuration.generateServerTransform(serverTransform, serverTransformParams);
+        if(transform != null)
         {
-            batcher.withTransform(configuration.createServerTransform());
-            logger.info("Transforming input doc payload with transform: " + configuration.getServerTransform());
-        }
-        else
-        {
-            logger.info("Ingesting doc payload without a transform");
+            batcher.withTransform(transform);
         }
 
         // Set up the timer to flush the pipe to MarkLogic if it's waiting to long
@@ -148,7 +162,7 @@ public class MarkLogicInsertionBatcher implements MarkLogicConnectionInvalidatio
                     lastWriteTime = System.currentTimeMillis() + 900000;
                 }
             }
-        }, (secondsBeforeFlush * 1000), secondsBeforeFlush * 1000);
+        }, secondsBeforeFlush * 1000, secondsBeforeFlush * 1000);
 
         // Set up the metadata to be used for the documents that will be inserted
         // ASSUMPTION: The same metadata will be used for every document to be inserted during the lifetime of this
@@ -161,8 +175,12 @@ public class MarkLogicInsertionBatcher implements MarkLogicConnectionInvalidatio
         {
             metadataHandle.withCollections(configCollections);
         }
-        // Set up quality new docs should have
-        metadataHandle.setQuality(outputQuality);
+
+        // not sure yet, but getting XDMP-INVOPTVAL when used with data hub's "mlIngest" transform; skipping for now
+        if (!usingDataHub) {
+            // Set up quality new docs should have
+            metadataHandle.setQuality(outputQuality);
+        }
 
         // Set up list of permissions that new docs should be granted
         String[] permissions = outputPermissions.split(",");
@@ -243,24 +261,16 @@ public class MarkLogicInsertionBatcher implements MarkLogicConnectionInvalidatio
      * @param temporalCollection
      * @return instance of the batcher
      */
-    static MarkLogicInsertionBatcher getInstance(MarkLogicConfiguration config, MarkLogicConnection connection, String outputCollections, String outputPermissions, int outputQuality, String jobName, String temporalCollection)
+    static MarkLogicInsertionBatcher getInstance(MarkLogicConfiguration config, MarkLogicConnection connection, DataHubConfiguration dataHubConfiguration, DataHubRunFlowOptions dataHubRunFlowOptions, String outputCollections, String outputPermissions, int outputQuality, String jobName, String temporalCollection, String serverTransform, String serverTransformParams)
     {
-        // String configId = config.getConfigId();
-        // MarkLogicInsertionBatcher instance = instances.get(configId);
-        // Uncomment above to support multiple connection config scenario
         if (instance == null)
         {
-            instance = new MarkLogicInsertionBatcher(config, connection, outputCollections, outputPermissions, outputQuality, jobName, temporalCollection);
-            // instances.put(configId,instance);
-            // Uncomment above to support multiple connection config scenario
+            instance = new MarkLogicInsertionBatcher(config, connection, dataHubConfiguration, dataHubRunFlowOptions, outputCollections, outputPermissions, outputQuality, jobName, temporalCollection, serverTransform, serverTransformParams);
         }
-        else if ((!(connection == null)) && (!connection.equals(instance.connection)))
+        else if ((!(connection == null)) && (!connection.equals(instance.connection)) && (instance.batcherRequiresReinit))
         {
-            if (instance.batcherRequiresReinit)
-            {
-                instance.initializeBatcher(connection, config, outputCollections, outputPermissions, outputQuality, temporalCollection);
-                instance.batcherRequiresReinit = false;
-            }
+            instance.initializeBatcher(connection, config, dataHubConfiguration, dataHubRunFlowOptions, outputCollections, outputPermissions, outputQuality, temporalCollection, serverTransform, serverTransformParams);
+            instance.batcherRequiresReinit = false;
         }
         return instance;
     }
@@ -280,11 +290,10 @@ public class MarkLogicInsertionBatcher implements MarkLogicConnectionInvalidatio
      * thing
      *
      * @param outURI -- the URI to be used for the document being inserted
-     * @param documentStream -- the InputStream containing the document to be
-     * inserted... comes from mule
+     * @param documentStream -- the InputStream containing the document to be inserted...comes from Mule
      * @return jobTicketID
      */
-    String doInsert(String outURI, InputStream documentStream)
+    InputStream doInsert(String outURI, InputStream documentStream)
     {
         // Add the InputStream to the DMSDK WriteBatcher object
         batcher.addAs(outURI, metadataHandle, new InputStreamHandle(documentStream));
@@ -293,7 +302,11 @@ public class MarkLogicInsertionBatcher implements MarkLogicConnectionInvalidatio
         // Have the DMSDK WriteBatcher object sleep until it is needed again
         batcher.awaitCompletion();
         // Return the job ticket ID so it can be used to retrieve the document in the future
-        return jobTicket.getJobId();
+        String jsonout = "\"" + jobTicket.getJobId() + "\"";
+        logger.debug("importDocs getJobId outcome: " + jsonout);
+        
+        Charset cs = StandardCharsets.UTF_8;
+        return new ByteArrayInputStream(jsonout.getBytes(cs));
     }
 
     private ZonedDateTime toZonedDateTime(Calendar calendar)

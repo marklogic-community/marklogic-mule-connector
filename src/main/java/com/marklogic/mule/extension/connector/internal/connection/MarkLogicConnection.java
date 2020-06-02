@@ -1,7 +1,7 @@
 /**
  * MarkLogic Mule Connector
  *
- * Copyright © 2019 MarkLogic Corporation.
+ * Copyright © 2020 MarkLogic Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License. You may obtain a copy of the License at
  *
@@ -13,6 +13,9 @@
  */
 package com.marklogic.mule.extension.connector.internal.connection;
 
+import com.marklogic.hub.DatabaseKind;
+import com.marklogic.hub.HubConfig;
+import com.marklogic.hub.impl.HubConfigImpl;
 import com.marklogic.mule.extension.connector.api.connection.AuthenticationType;
 import java.io.FileInputStream;
 import java.io.InputStream;
@@ -26,9 +29,12 @@ import com.marklogic.client.DatabaseClientFactory;
 import com.marklogic.client.ext.DatabaseClientConfig;
 import com.marklogic.client.ext.DefaultConfiguredDatabaseClientFactory;
 import com.marklogic.client.ext.SecurityContextType;
-import com.marklogic.mule.extension.connector.internal.exception.MarkLogicConnectorException;
+import com.marklogic.mule.extension.connector.internal.config.DataHubConfiguration;
+import com.marklogic.mule.extension.connector.internal.error.exception.MarkLogicConnectorException;
 
 import com.marklogic.mule.extension.connector.internal.operation.MarkLogicConnectionInvalidationListener;
+import org.mule.runtime.api.lifecycle.Initialisable;
+import org.mule.runtime.api.lifecycle.InitialisationException;
 import org.mule.runtime.api.tls.TlsContextFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,7 +46,6 @@ public final class MarkLogicConnection
 
     private static final Logger logger = LoggerFactory.getLogger(MarkLogicConnection.class);
 
-    //private static final SecurityContextType DEFAULT_AUTHENTICATION_TYPE = SecurityContextType.BASIC;
     private DatabaseClient client;
     private final String hostname;
     private final int port;
@@ -57,7 +62,16 @@ public final class MarkLogicConnection
     public MarkLogicConnection(String hostname, int port, String database, String username, String password, AuthenticationType authenticationType, TlsContextFactory sslContext, String kerberosExternalName, String connectionId)
     {
 
-        this.useSSL = (sslContext != null);
+        this.useSSL = sslContext != null;
+        if (sslContext instanceof Initialisable) {
+            try {
+                ((Initialisable) sslContext).initialise();
+            } catch (InitialisationException e) {
+                String message = "Error initializing SSL Context.";
+                logger.error(message, e);
+                throw new MarkLogicConnectorException(message, e);
+            }
+        }
         this.sslContext = sslContext;
         this.hostname = hostname;
         this.port = port;
@@ -71,7 +85,7 @@ public final class MarkLogicConnection
 
     public void connect() throws MarkLogicConnectorException
     {
-
+        logger.debug("Kerberos external name: " + this.kerberosExternalName);
         logger.info("MarkLogic connection id = " + this.getId());
         try
         {
@@ -86,6 +100,11 @@ public final class MarkLogicConnection
 
     }
 
+    public DatabaseClient getClient()
+    {
+        return this.client;
+    }
+        
     public String getId()
     {
         return this.connectionId;
@@ -94,12 +113,10 @@ public final class MarkLogicConnection
     public void invalidate()
     {
         client.release();
-        markLogicClientInvalidationListeners.forEach((listener) ->
-        {
-            listener.markLogicConnectionInvalidated();
-        });
+        markLogicClientInvalidationListeners.forEach((listener) -> listener.markLogicConnectionInvalidated());
         logger.debug("MarkLogic connection invalidated.");
-  }
+    }
+    
     public boolean isConnected(int port)
     {
 
@@ -114,16 +131,21 @@ public final class MarkLogicConnection
         }
     }
 
-    public DatabaseClient getClient()
+    public void addMarkLogicClientInvalidationListener(MarkLogicConnectionInvalidationListener listener) 
     {
-        return this.client;
+        markLogicClientInvalidationListeners.add(listener);
     }
-
+    
+    public void removeMarkLogicClientInvalidationListener(MarkLogicConnectionInvalidationListener listener) 
+    {
+        markLogicClientInvalidationListeners.remove(listener);
+    }
+    
     private boolean isDefined(String str)
     {
         return str != null && !str.trim().isEmpty() && !"null".equalsIgnoreCase(str.trim());
     }
-
+    
     private void createClient() throws Exception
     {
 
@@ -131,26 +153,16 @@ public final class MarkLogicConnection
 
         config.setHost(hostname);
         config.setPort(port);
-
-        switch (authenticationType)
-        {
-            case basic:
-                config.setSecurityContextType(SecurityContextType.BASIC);
-                break;
-            case digest:
-                config.setSecurityContextType(SecurityContextType.DIGEST);
-                break;
-            case certificate:
-                config.setSecurityContextType(SecurityContextType.CERTIFICATE);
-        }
-
-        config.setUsername(username);
-        config.setPassword(password);
-
+        
         if (isDefined(database))
         {
             config.setDatabase(database);
         }
+        
+        setConfigAuthType(config);
+
+        config.setUsername(username);
+        config.setPassword(password);
 
         if (useSSL)
         {
@@ -158,32 +170,9 @@ public final class MarkLogicConnection
             {
                 logger.debug(String.format("Creating connection using SSL connection with SSL Context: '%s'.", sslContext));
             }
+            
             SSLContext context = sslContext.createSslContext();
             config.setSslContext(context);
-            
-            // N.b: Figure out what this means:
-            // config.setConnectionType(DatabaseClient.ConnectionType.GATEWAY or DatabaseClient.ConnectionType.DIRECT);
-            if (AuthenticationType.certificate == authenticationType && sslContext.isTrustStoreConfigured())
-            {
-                String defaultAlgorithm = TrustManagerFactory.getDefaultAlgorithm();
-                TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance(defaultAlgorithm);
-                final KeyStore trustStore = getTrustStore(sslContext.getTrustStoreConfiguration().getType());
-                try (final InputStream is = new FileInputStream(sslContext.getTrustStoreConfiguration().getPath()))
-                {
-                    trustStore.load(is, sslContext.getTrustStoreConfiguration().getPassword().toCharArray());
-                }
-                trustManagerFactory.init(trustStore);
-                X509TrustManager tm = (X509TrustManager) trustManagerFactory.getTrustManagers()[0];
-                if (logger.isDebugEnabled())
-                {
-                    Enumeration<String> enumera = trustStore.aliases();
-                    while (enumera.hasMoreElements())
-                    {
-                        logger.debug("Got cert with alias: " + enumera.nextElement());
-                    }
-                }
-                config.setTrustManager(tm);
-            }
         }
         else
         {
@@ -196,6 +185,54 @@ public final class MarkLogicConnection
         client = new DefaultConfiguredDatabaseClientFactory().newDatabaseClient(config);
     }
 
+    private void setConfigAuthType(DatabaseClientConfig config) throws Exception 
+    {
+        switch (authenticationType)
+        {
+            case basic:
+                config.setSecurityContextType(SecurityContextType.BASIC);
+                break;
+            case digest:
+                config.setSecurityContextType(SecurityContextType.DIGEST);
+                break;
+            case certificate:
+                config.setSecurityContextType(SecurityContextType.CERTIFICATE);
+                setTrustManager(config);
+                break;
+            default:
+                config.setSecurityContextType(SecurityContextType.DIGEST);
+                break;
+        }
+    }
+        
+    private void setTrustManager(DatabaseClientConfig config) throws Exception
+    {
+        if (sslContext.isTrustStoreConfigured())
+        {
+            String defaultAlgorithm = TrustManagerFactory.getDefaultAlgorithm();
+            TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance(defaultAlgorithm);
+            final KeyStore trustStore = getTrustStore(sslContext.getTrustStoreConfiguration().getType());
+            
+            try (final InputStream is = new FileInputStream(sslContext.getTrustStoreConfiguration().getPath()))
+            {
+                trustStore.load(is, sslContext.getTrustStoreConfiguration().getPassword().toCharArray());
+            }
+            
+            trustManagerFactory.init(trustStore);
+            X509TrustManager tm = (X509TrustManager) trustManagerFactory.getTrustManagers()[0];
+            
+            if (logger.isDebugEnabled())
+            {
+                Enumeration<String> enumera = trustStore.aliases();
+                while (enumera.hasMoreElements())
+                {
+                    logger.debug("Found cert with alias: " + enumera.nextElement());
+                }
+            }
+            config.setTrustManager(tm);
+        }
+    }
+    
     private KeyStore getTrustStore(String trustStoreType) throws KeyStoreException
     {
         // N.b: Make Key Store Provider Configurable in the UI
@@ -219,16 +256,23 @@ public final class MarkLogicConnection
             }
         }
         return KeyStore.getInstance(trustStoreType);
-
     }
 
-    public void addMarkLogicClientInvalidationListener(MarkLogicConnectionInvalidationListener listener) 
-    {
-        markLogicClientInvalidationListeners.add(listener);
+    public HubConfig createHubConfig() {
+        return new HubConfigImpl(this.hostname, this.username, this.password);
     }
-    
-    public void removeMarkLogicClientInvalidationListener(MarkLogicConnectionInvalidationListener listener) 
-    {
-        markLogicClientInvalidationListeners.remove(listener);
+
+    public HubConfig createHubConfig(DataHubConfiguration dataHubConfiguration) {
+        HubConfig hubConfig = createHubConfig();
+
+        // DHF 5.2 only supports basic/digest auth, so this can safely be done
+        hubConfig.setPort(DatabaseKind.STAGING, dataHubConfiguration.getStagingPort());
+        hubConfig.setDbName(DatabaseKind.STAGING, dataHubConfiguration.getStagingDbName());
+        hubConfig.setPort(DatabaseKind.FINAL, dataHubConfiguration.getFinalPort());
+        hubConfig.setDbName(DatabaseKind.FINAL, dataHubConfiguration.getFinalDbName());
+        hubConfig.setPort(DatabaseKind.JOB, dataHubConfiguration.getJobsPort());
+        hubConfig.setDbName(DatabaseKind.JOB, dataHubConfiguration.getJobsDbName());
+
+        return hubConfig;
     }
 }
