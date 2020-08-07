@@ -23,7 +23,9 @@ import com.marklogic.mule.extension.connector.internal.connection.MarkLogicConne
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**

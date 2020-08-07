@@ -14,21 +14,21 @@
 package com.marklogic.mule.extension.connector.internal.config;
 
 import com.marklogic.client.document.ServerTransform;
-import com.marklogic.mule.extension.connector.internal.operation.MarkLogicOperations;
 import com.marklogic.mule.extension.connector.internal.connection.provider.MarkLogicConnectionProvider;
 import com.marklogic.mule.extension.connector.internal.error.exception.MarkLogicConnectorException;
-import java.util.Arrays;
-import java.util.List;
-
+import com.marklogic.mule.extension.connector.internal.operation.MarkLogicOperations;
 import org.mule.runtime.extension.api.annotation.Operations;
 import org.mule.runtime.extension.api.annotation.connectivity.ConnectionProviders;
-import org.mule.runtime.extension.api.annotation.param.Parameter;
 import org.mule.runtime.extension.api.annotation.param.Optional;
+import org.mule.runtime.extension.api.annotation.param.Parameter;
 import org.mule.runtime.extension.api.annotation.param.display.DisplayName;
 import org.mule.runtime.extension.api.annotation.param.display.Example;
 import org.mule.runtime.extension.api.annotation.param.display.Summary;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.Arrays;
+import java.util.List;
 
 /**
  * This class represents an extension configuration, values set in this class

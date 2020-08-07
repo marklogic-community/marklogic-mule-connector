@@ -15,13 +15,13 @@ package com.marklogic.mule.extension.connector.internal.extension;
 
 import com.marklogic.mule.extension.connector.internal.config.MarkLogicConfiguration;
 import com.marklogic.mule.extension.connector.internal.error.MarkLogicConnectorSimpleErrorType;
-
-import static org.mule.runtime.api.meta.Category.CERTIFIED;
-import org.mule.runtime.extension.api.annotation.Extension;
 import org.mule.runtime.extension.api.annotation.Configurations;
+import org.mule.runtime.extension.api.annotation.Extension;
 import org.mule.runtime.extension.api.annotation.dsl.xml.Xml;
 import org.mule.runtime.extension.api.annotation.error.ErrorTypes;
 import org.mule.runtime.extension.api.annotation.license.RequiresEnterpriseLicense;
+
+import static org.mule.runtime.api.meta.Category.CERTIFIED;
 
 /**
  * This is the main class of an extension, is the entry point from which

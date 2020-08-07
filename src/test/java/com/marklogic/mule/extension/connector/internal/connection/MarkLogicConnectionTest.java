@@ -13,14 +13,13 @@
  */
 package com.marklogic.mule.extension.connector.internal.connection;
 
-import com.marklogic.mule.extension.connector.api.connection.AuthenticationType;
 import com.marklogic.client.DatabaseClient;
 import com.marklogic.client.DatabaseClientFactory;
 import com.marklogic.client.DatabaseClientFactory.BasicAuthContext;
 import com.marklogic.client.DatabaseClientFactory.DigestAuthContext;
+import com.marklogic.mule.extension.connector.api.connection.AuthenticationType;
 import com.marklogic.mule.extension.connector.internal.operation.MarkLogicConnectionInvalidationListener;
 import org.junit.Test;
-import static org.junit.Assert.*;
 import org.mule.runtime.api.tls.TlsContextFactory;
 import org.mule.runtime.api.tls.TlsContextKeyStoreConfiguration;
 import org.mule.runtime.api.tls.TlsContextTrustStoreConfiguration;
@@ -30,7 +29,10 @@ import javax.net.ssl.SSLServerSocketFactory;
 import javax.net.ssl.SSLSocketFactory;
 import java.security.KeyManagementException;
 import java.security.NoSuchAlgorithmException;
-import static org.mockito.Mockito.*;
+
+import static org.junit.Assert.*;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 
 /**
  *

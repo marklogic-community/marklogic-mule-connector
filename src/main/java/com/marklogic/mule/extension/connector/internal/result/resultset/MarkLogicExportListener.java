@@ -13,9 +13,7 @@
  */
 package com.marklogic.mule.extension.connector.internal.result.resultset;
 
-import com.marklogic.client.datamovement.DataMovementManager;
 import com.marklogic.client.datamovement.ExportListener;
-import com.marklogic.client.datamovement.QueryBatcher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

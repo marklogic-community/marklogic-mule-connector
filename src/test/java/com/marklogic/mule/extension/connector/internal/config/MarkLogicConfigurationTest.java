@@ -15,9 +15,11 @@ package com.marklogic.mule.extension.connector.internal.config;
 
 import com.marklogic.client.document.ServerTransform;
 import com.marklogic.mule.extension.connector.internal.error.exception.MarkLogicConnectorException;
-import java.util.List;
 import org.junit.Before;
 import org.junit.Test;
+
+import java.util.List;
+
 import static org.junit.Assert.*;
 
 /**

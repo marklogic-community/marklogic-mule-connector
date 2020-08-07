@@ -14,10 +14,11 @@
 package com.marklogic.mule.extension.connector.internal.error.provider;
 
 import com.marklogic.mule.extension.connector.internal.error.MarkLogicConnectorSimpleErrorType;
-import java.util.Set;
-import java.util.HashSet;
 import org.mule.runtime.extension.api.annotation.error.ErrorTypeProvider;
 import org.mule.runtime.extension.api.error.ErrorTypeDefinition;
+
+import java.util.HashSet;
+import java.util.Set;
 
 public class MarkLogicExecuteErrorsProvider implements ErrorTypeProvider
 {

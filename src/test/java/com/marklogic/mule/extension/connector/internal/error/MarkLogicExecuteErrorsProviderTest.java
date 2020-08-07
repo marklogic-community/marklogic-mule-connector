@@ -14,10 +14,13 @@
 package com.marklogic.mule.extension.connector.internal.error;
 
 import com.marklogic.mule.extension.connector.internal.error.provider.MarkLogicExecuteErrorsProvider;
-import java.util.Set;
 import org.junit.Test;
-import static org.junit.Assert.*;
 import org.mule.runtime.extension.api.error.ErrorTypeDefinition;
+
+import java.util.Set;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 /**
  *

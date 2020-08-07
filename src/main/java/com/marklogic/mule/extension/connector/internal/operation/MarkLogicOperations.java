@@ -13,13 +13,6 @@
  */
 package com.marklogic.mule.extension.connector.internal.operation;
 
-import java.io.ByteArrayInputStream;
-import java.io.InputStream;
-import java.io.IOException;
-
-import java.util.*;
-import java.util.concurrent.atomic.AtomicBoolean;
-
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -28,41 +21,43 @@ import com.marklogic.client.datamovement.DataMovementManager;
 import com.marklogic.client.datamovement.DeleteListener;
 import com.marklogic.client.datamovement.QueryBatcher;
 import com.marklogic.client.document.ServerTransform;
-import com.marklogic.client.io.*;
+import com.marklogic.client.io.SearchHandle;
 import com.marklogic.client.query.QueryDefinition;
 import com.marklogic.client.query.QueryManager;
-
 import com.marklogic.mule.extension.connector.api.operation.MarkLogicQueryFormat;
 import com.marklogic.mule.extension.connector.api.operation.MarkLogicQueryStrategy;
 import com.marklogic.mule.extension.connector.internal.config.MarkLogicConfiguration;
 import com.marklogic.mule.extension.connector.internal.connection.MarkLogicConnection;
 import com.marklogic.mule.extension.connector.internal.error.provider.MarkLogicExecuteErrorsProvider;
-import com.marklogic.mule.extension.connector.internal.metadata.MarkLogicSelectMetadataResolver;
 import com.marklogic.mule.extension.connector.internal.metadata.MarkLogicAnyMetadataResolver;
+import com.marklogic.mule.extension.connector.internal.metadata.MarkLogicSelectMetadataResolver;
 import com.marklogic.mule.extension.connector.internal.result.resultset.MarkLogicExportListener;
 import com.marklogic.mule.extension.connector.internal.result.resultset.MarkLogicResultSetCloser;
 import com.marklogic.mule.extension.connector.internal.result.resultset.MarkLogicResultSetIterator;
-
 import org.mule.runtime.api.exception.MuleException;
 import org.mule.runtime.extension.api.annotation.error.Throws;
 import org.mule.runtime.extension.api.annotation.metadata.OutputResolver;
-import org.mule.runtime.extension.api.annotation.param.MediaType;
-import static org.mule.runtime.extension.api.annotation.param.MediaType.ANY;
-import static org.mule.runtime.extension.api.annotation.param.MediaType.APPLICATION_JSON;
-import org.mule.runtime.extension.api.annotation.param.Config;
-import org.mule.runtime.extension.api.annotation.param.Content;
-import org.mule.runtime.extension.api.annotation.param.Connection;
-import org.mule.runtime.extension.api.annotation.param.Optional;
+import org.mule.runtime.extension.api.annotation.param.*;
 import org.mule.runtime.extension.api.annotation.param.display.DisplayName;
 import org.mule.runtime.extension.api.annotation.param.display.Example;
 import org.mule.runtime.extension.api.annotation.param.display.Summary;
-
 import org.mule.runtime.extension.api.annotation.param.display.Text;
 import org.mule.runtime.extension.api.runtime.operation.FlowListener;
 import org.mule.runtime.extension.api.runtime.streaming.PagingProvider;
 import org.mule.runtime.extension.api.runtime.streaming.StreamingHelper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+import static org.mule.runtime.extension.api.annotation.param.MediaType.ANY;
+import static org.mule.runtime.extension.api.annotation.param.MediaType.APPLICATION_JSON;
 
 /**
 * This class is a container for operations, every public method in this class will be taken as an extension operation for the MarkLogic MuleSoft Connector
@@ -101,7 +96,6 @@ public class MarkLogicOperations
  * @return java.io.InputStream
  * @throws com.marklogic.mule.extension.connector.internal.error.provider.MarkLogicExecuteErrorsProvider
  * @since 1.0.0
- * @version 1.1.1
  */
     @MediaType(value = APPLICATION_JSON, strict = true)
     @Throws(MarkLogicExecuteErrorsProvider.class)
@@ -174,7 +168,6 @@ public class MarkLogicOperations
 
  /**
  * <p>Retrieves a JSON representation of a <a target="_blank" href="https://docs.marklogic.com/guide/java/intro">MarkLogic Java API</a> <a target="_blank" href="https://docs.marklogic.com/guide/java/data-movement">Data Movement SDK (DMSDK)</a> <a target="_blank" href="https://docs.marklogic.com/javadoc/client/com/marklogic/client/datamovement/JobReport.html">JobReport</a> following an importDocs operation.</p>
- * @return java.lang.String
  * @throws com.marklogic.mule.extension.connector.internal.error.provider.MarkLogicExecuteErrorsProvider
  * @since 1.0.0
  * @return java.io.InputStream
@@ -217,7 +210,6 @@ public class MarkLogicOperations
  * @param connection The MarkLogic connection details
  * @return java.lang.String
  * @since 1.0.0
- * @version 1.1.1
  */
     @MediaType(value = ANY, strict = false)
     public String retrieveInfo(@Config MarkLogicConfiguration configuration, @Connection MarkLogicConnection connection)
@@ -237,7 +229,6 @@ public class MarkLogicOperations
  * @return java.io.InputStream
  * @throws com.marklogic.mule.extension.connector.internal.error.provider.MarkLogicExecuteErrorsProvider
  * @since 1.1.0
- * @version 1.1.1
  */
     @MediaType(value = APPLICATION_JSON, strict = true)
     @Throws(MarkLogicExecuteErrorsProvider.class)
@@ -357,7 +348,6 @@ public class MarkLogicOperations
  * @return org.mule.runtime.extension.api.runtime.streaming.PagingProvider
  * @throws com.marklogic.mule.extension.connector.internal.error.provider.MarkLogicExecuteErrorsProvider
  * @since 1.1.0
- * @version 1.1.1
  */
     @MediaType(value = ANY, strict = false)
     @OutputResolver(output = MarkLogicAnyMetadataResolver.class)
@@ -474,7 +464,6 @@ public class MarkLogicOperations
  * @return org.mule.runtime.extension.api.runtime.streaming.PagingProvider
  * @throws com.marklogic.mule.extension.connector.internal.error.provider.MarkLogicExecuteErrorsProvider
  * @since 1.1.0
- * @version 1.1.1
  */
     @MediaType(value = ANY, strict = false)
     @OutputResolver(output = MarkLogicAnyMetadataResolver.class)

@@ -15,18 +15,11 @@ package com.marklogic.mule.extension.connector.internal.connection.provider;
 
 import com.marklogic.mule.extension.connector.api.connection.AuthenticationType;
 import com.marklogic.mule.extension.connector.internal.connection.MarkLogicConnection;
-
-import org.mule.runtime.api.connection.ConnectionException;
+import org.mule.runtime.api.connection.*;
 import org.mule.runtime.api.tls.TlsContextFactory;
-import org.mule.runtime.extension.api.annotation.param.Parameter;
 import org.mule.runtime.extension.api.annotation.param.Optional;
-import org.mule.runtime.extension.api.annotation.param.ParameterGroup;
+import org.mule.runtime.extension.api.annotation.param.Parameter;
 import org.mule.runtime.extension.api.annotation.param.display.*;
-import org.mule.runtime.api.connection.ConnectionValidationResult;
-import org.mule.runtime.api.connection.PoolingConnectionProvider;
-import org.mule.runtime.api.connection.ConnectionProvider;
-import org.mule.runtime.api.connection.CachedConnectionProvider;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

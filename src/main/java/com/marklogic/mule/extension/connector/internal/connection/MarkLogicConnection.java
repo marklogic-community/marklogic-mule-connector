@@ -13,21 +13,13 @@
  */
 package com.marklogic.mule.extension.connector.internal.connection;
 
-import com.marklogic.mule.extension.connector.api.connection.AuthenticationType;
-import java.io.FileInputStream;
-import java.io.InputStream;
-import java.security.*;
-import java.util.Enumeration;
-import java.util.HashSet;
-import java.util.Set;
-
 import com.marklogic.client.DatabaseClient;
 import com.marklogic.client.DatabaseClientFactory;
 import com.marklogic.client.ext.DatabaseClientConfig;
 import com.marklogic.client.ext.DefaultConfiguredDatabaseClientFactory;
 import com.marklogic.client.ext.SecurityContextType;
+import com.marklogic.mule.extension.connector.api.connection.AuthenticationType;
 import com.marklogic.mule.extension.connector.internal.error.exception.MarkLogicConnectorException;
-
 import com.marklogic.mule.extension.connector.internal.operation.MarkLogicConnectionInvalidationListener;
 import org.mule.runtime.api.lifecycle.Initialisable;
 import org.mule.runtime.api.lifecycle.InitialisationException;
@@ -35,7 +27,17 @@ import org.mule.runtime.api.tls.TlsContextFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.net.ssl.*;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManagerFactory;
+import javax.net.ssl.X509TrustManager;
+import java.io.FileInputStream;
+import java.io.InputStream;
+import java.security.KeyStore;
+import java.security.KeyStoreException;
+import java.security.NoSuchProviderException;
+import java.util.Enumeration;
+import java.util.HashSet;
+import java.util.Set;
 
 public final class MarkLogicConnection
 {

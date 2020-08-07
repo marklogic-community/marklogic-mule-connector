@@ -16,9 +16,11 @@ package com.marklogic.mule.extension.connector.internal.connection.provider;
 import com.marklogic.mule.extension.connector.api.connection.AuthenticationType;
 import com.marklogic.mule.extension.connector.internal.connection.MarkLogicConnection;
 import org.junit.Test;
-import static org.junit.Assert.*;
 import org.mule.runtime.api.connection.ConnectionException;
 import org.mule.runtime.api.connection.ConnectionValidationResult;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 /**
  *

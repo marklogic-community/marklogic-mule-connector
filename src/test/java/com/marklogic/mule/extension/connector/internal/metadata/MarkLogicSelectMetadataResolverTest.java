@@ -14,9 +14,10 @@
 package com.marklogic.mule.extension.connector.internal.metadata;
 
 import org.junit.Test;
-import static org.junit.Assert.*;
 import org.mule.metadata.api.model.MetadataType;
 import org.mule.runtime.api.metadata.MetadataContext;
+
+import static org.junit.Assert.assertEquals;
 
 /**
  *
