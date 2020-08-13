@@ -12,7 +12,7 @@
     
     <groupId>com.marklogic</groupId> 
     <artifactId>marklogic-mule-connector</artifactId>
-    <version>1.1.1</version>
+    <version>1.2.0-SNAPSHOT</version>
     <packaging>mule-extension</packaging>
     
     <properties>
@@ -25,8 +25,9 @@
         
         <!-- Compile Dependencies and Plugins Versions -->
         <marklogic.data.movement.version>1.0</marklogic.data.movement.version>
-        <marklogic.client.api.version>5.1.0</marklogic.client.api.version>
+        <marklogic.client.api.version>5.2.0</marklogic.client.api.version>
         <marklogic.javaclient.util.version>3.10.0</marklogic.javaclient.util.version>
+        <marklogic.data.hub.version>5.2.1</marklogic.data.hub.version>
         <apache.commons-jexl3.version>3.1</apache.commons-jexl3.version>
         
         <mule.runtime.version>4.3.0</mule.runtime.version>
@@ -89,12 +90,13 @@
                 <configuration>
                     <runtimeVersion>${mule.runtime.version}</runtimeVersion>
                     <runtimeProduct>MULE_EE</runtimeProduct>
-                    <!--<runtimeConfiguration>
+                    <!-- Keep the following.  It is used to prevent MUnit tests from running against unintended snapshot versions which can fail during certification. -->
+                    <runtimeConfiguration>
                         <discoverRuntimes>
                             <product>EE</product>
                             <includeSnapshots>false</includeSnapshots>
                         </discoverRuntimes>
-                    </runtimeConfiguration>-->
+                    </runtimeConfiguration>
                 </configuration>
                 <!--MUnit Dependencies--> 
                 <dependencies>
@@ -185,28 +187,16 @@
             <version>${apache.commons-jexl3.version}</version>
         </dependency>
         <dependency>
+            <groupId>com.marklogic</groupId>
+            <artifactId>marklogic-data-hub</artifactId>
+            <version>${marklogic.data.hub.version}</version>
+            <!--<type>pom</type>-->
+        </dependency>
+        <dependency>
             <groupId>org.mule.connectors</groupId>
             <artifactId>mule-file-connector</artifactId>
             <version>${mule.file.connector.version}</version>
             <classifier>mule-plugin</classifier>
-        </dependency>
-        <dependency>
-            <groupId>javax.xml.bind</groupId>
-            <artifactId>jaxb-api</artifactId>
-            <version>${jaxb.version}</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>com.sun.xml.bind</groupId>
-            <artifactId>jaxb-core</artifactId>
-            <version>${jaxb.version}</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>com.sun.xml.bind</groupId>
-            <artifactId>jaxb-impl</artifactId>
-            <version>${jaxb.version}</version>
-            <scope>test</scope>
         </dependency>
     </dependencies>
     
@@ -221,6 +211,15 @@
             <name>MuleSoft Releases Repository</name>
             <url>https://repository.mulesoft.org/releases/</url>
             <layout>default</layout>
+        </repository>
+        <!-- Needed by marklogic-data-hub (dependency on ml-app-deployer) -->
+        <repository>
+            <id>central</id>
+            <name>bintray</name>
+            <url>https://jcenter.bintray.com</url>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
         </repository>
     </repositories>
     
@@ -242,8 +241,8 @@
     
     <scm>
         <connection>scm:git:git://github.com/marklogic-community/marklogic-mule-connector</connection>
-        <developerConnection>scm:svn:https://github.com/marklogic-community/marklogic-mule-connector/tree/release/v1.1.1</developerConnection>
-        <tag>marklogic-mule-connector-1.1.1</tag>
-        <url>https://github.com/marklogic-community/marklogic-mule-connector/tree/release/v1.1.1</url>
+        <developerConnection>scm:svn:https://github.com/marklogic-community/marklogic-mule-connector/tree/release/v1.2.0</developerConnection>
+        <tag>marklogic-mule-connector-1.2.0</tag>
+        <url>https://github.com/marklogic-community/marklogic-mule-connector/tree/release/v1.2.0</url>
     </scm>
 </project>
