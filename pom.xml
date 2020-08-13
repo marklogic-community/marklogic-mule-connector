@@ -41,8 +41,6 @@
         <munit.version>2.3.0</munit.version>
         <munit.extensions.maven.plugin.version>1.0.0</munit.extensions.maven.plugin.version>
         <munit.mtf.tools.version>1.0.0</munit.mtf.tools.version>
-      
-        <jaxb.version>2.3.0</jaxb.version>
     </properties>
     
     <build>
