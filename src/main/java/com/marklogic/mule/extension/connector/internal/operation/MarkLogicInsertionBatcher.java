@@ -36,10 +36,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.Calendar;
-import java.util.TimeZone;
-import java.util.Timer;
-import java.util.TimerTask;
+import java.util.*;
 
 import com.marklogic.mule.extension.connector.internal.error.exception.MarkLogicConnectorException;
 import org.slf4j.Logger;
@@ -55,9 +52,9 @@ public class MarkLogicInsertionBatcher implements MarkLogicConnectionInvalidatio
 
     private static final DateTimeFormatter ISO8601_DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSSXXX");
 
-    // If support for multiple connection configs within a flow is required, remove the above and uncomment the below.
-    // private static Map<String,MarkLogicInsertionBatcher> instances = new HashMap<>()_
-    
+    // a hash used internally to uniquely identify the batcher based on its current configuration
+    private int signature;
+
     // Object that describes the metadata for documents being inserted
     private DocumentMetadataHandle metadataHandle;
 
@@ -79,7 +76,7 @@ public class MarkLogicInsertionBatcher implements MarkLogicConnectionInvalidatio
     private Timer timer = null;
 
     /**
-     * Private constructor-- enforces singleton pattern
+     * Creates a new insertion batcher.
      *
      * @param marklogicConfiguration -- information describing how the insertion process
      * should work
@@ -89,12 +86,19 @@ public class MarkLogicInsertionBatcher implements MarkLogicConnectionInvalidatio
      */
     public MarkLogicInsertionBatcher(MarkLogicConfiguration marklogicConfiguration, MarkLogicConnection connection, String outputCollections, String outputPermissions, int outputQuality, String jobName, String temporalCollection, String serverTransform, String serverTransformParams)
     {
+        this.signature = computeSignature(marklogicConfiguration, connection, outputCollections, outputPermissions, outputQuality, jobName, temporalCollection, serverTransform, serverTransformParams);
+
         // get the object handles needed to talk to MarkLogic
-        initializeBatcher(connection, marklogicConfiguration, outputCollections, outputPermissions, outputQuality, temporalCollection, serverTransform, serverTransformParams);
+        initializeBatcher(marklogicConfiguration, connection, outputCollections, outputPermissions, outputQuality, temporalCollection, serverTransform, serverTransformParams);
+
         this.jobName = jobName;
     }
 
-    private void initializeBatcher(MarkLogicConnection connection, MarkLogicConfiguration configuration, String outputCollections, String outputPermissions, int outputQuality, String temporalCollection, String serverTransform, String serverTransformParams)
+    public static int computeSignature(MarkLogicConfiguration configuration, MarkLogicConnection connection, String outputCollections, String outputPermissions, int outputQuality, String jobName, String temporalCollection, String serverTransform, String serverTransformParams) {
+        return Objects.hash(configuration, connection, outputCollections, outputPermissions, outputQuality, jobName, temporalCollection, serverTransform, serverTransformParams);
+    }
+
+    private void initializeBatcher(MarkLogicConfiguration configuration, MarkLogicConnection connection, String outputCollections, String outputPermissions, int outputQuality, String temporalCollection, String serverTransform, String serverTransformParams)
     {
         this.connection = connection;
         connection.addMarkLogicClientInvalidationListener(this);
@@ -104,7 +108,7 @@ public class MarkLogicInsertionBatcher implements MarkLogicConnectionInvalidatio
         // Configure the batcher's behavior
         batcher.withBatchSize(configuration.getBatchSize())
                 .withThreadCount(configuration.getThreadCount())
-                .onBatchSuccess((batch) -> logger.info("Writes so far: " + batch.getJobWritesSoFar()))
+                .onBatchSuccess((batch) -> logger.info("Batcher with signature " + getSignature() + " on connection ID " + connection.getId() + " writes so far: " + batch.getJobWritesSoFar()))
                 .onBatchFailure((batch, throwable) -> logger.error("Exception thrown by an onBatchSuccess listener", throwable));
 
         // Configure the transform to be used, if any
@@ -200,6 +204,10 @@ public class MarkLogicInsertionBatcher implements MarkLogicConnectionInvalidatio
             batcher.flushAndWait();
             dmm.stopJob(this.jobTicket);
         }
+    }
+
+    public int getSignature() {
+        return this.signature;
     }
 
     /**

@@ -44,7 +44,7 @@ import org.slf4j.LoggerFactory;
  * creates and caches connections or simply {@link ConnectionProvider} if you
  * want a new connection each time something requires one.
  */
-public class MarkLogicConnectionProvider implements PoolingConnectionProvider<MarkLogicConnection>
+public class MarkLogicConnectionProvider implements CachedConnectionProvider<MarkLogicConnection>
 {
 
     private static final Logger logger = LoggerFactory.getLogger(MarkLogicConnectionProvider.class);
