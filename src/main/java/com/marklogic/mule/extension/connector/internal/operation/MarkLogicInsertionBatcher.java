@@ -261,8 +261,7 @@ public class MarkLogicInsertionBatcher implements MarkLogicConnectionInvalidatio
         batcher.addAs(outURI, metadataHandle, new InputStreamHandle(documentStream));
         // Update the most recent insert's timestamp
         lastWriteTime = System.currentTimeMillis();
-        // Have the DMSDK WriteBatcher object sleep until it is needed again
-        batcher.awaitCompletion();
+
         // Return the job ticket ID so it can be used to retrieve the document in the future
         String jsonout = "\"" + jobTicket.getJobId() + "\"";
         logger.debug("importDocs getJobId outcome: " + jsonout);
